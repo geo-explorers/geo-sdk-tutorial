@@ -148,7 +148,15 @@ Available view modes for data blocks:
 Import constants from `src/constants.ts`:
 
 ```typescript
-import { TYPES, PROPERTIES, VIEWS, DATA_TYPES, ROOT_SPACE_ID } from "../src/constants.js";
+import {
+  TYPES,
+  PROPERTIES,
+  VIEWS,
+  DATA_TYPES,
+  ROOT_SPACE_ID,
+  QUERY_DATA_SOURCE,
+  COLLECTION_DATA_SOURCE,
+} from "../src/constants.js";
 
 // Use well-known Person type
 const personResult = Graph.createEntity({
