@@ -1,0 +1,27 @@
+[
+  {
+    "name": "Alex Blockchain",
+    "description": "A distributed systems architect specializing in consensus protocols",
+    "topics": ["Blockchain", "Web3"]
+  },
+  {
+    "name": "Sam Crypto",
+    "description": "A cryptographer focused on privacy-preserving technologies",
+    "topics": ["Blockchain"]
+  },
+  {
+    "name": "Jordan Neural",
+    "description": "A machine learning researcher exploring deep neural networks",
+    "topics": ["Artificial Intelligence", "Machine Learning"]
+  },
+  {
+    "name": "Taylor Algorithm",
+    "description": "An AI engineer building production ML systems",
+    "topics": ["Artificial Intelligence", "Machine Learning"]
+  },
+  {
+    "name": "Casey Semantic",
+    "description": "A knowledge engineer working on linked data systems",
+    "topics": ["Web3", "Knowledge Graphs"]
+  }
+]

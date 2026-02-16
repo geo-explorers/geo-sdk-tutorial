@@ -1,22 +1,30 @@
 {
   "name": "geo-sdk-courses",
-  "version": "1.0.0",
-  "description": "Learn the Geo SDK through progressive courses",
+  "version": "2.0.0",
+  "description": "Learn the Geo SDK through progressive courses - from basics to advanced patterns",
   "type": "module",
   "scripts": {
-    "course1": "npx tsx courses/01-ids.ts",
-    "course2": "npx tsx courses/02-properties.ts",
-    "course3": "npx tsx courses/03-types.ts",
-    "course4": "npx tsx courses/04-entities.ts",
-    "course5": "npx tsx courses/05-relations.ts",
-    "course6": "npx tsx courses/06-edits.ts",
-    "course7": "npx tsx courses/07-publishing.ts",
-    "course8": "npx tsx courses/08-smart-accounts.ts",
-    "course9": "npx tsx courses/09-dao-governance.ts",
-    "capstone": "npx tsx courses/10-capstone.ts"
+    "course1": "npx tsx courses/01-overview.ts",
+    "course2": "npx tsx courses/02-reading-data.ts",
+    "course3": "npx tsx courses/03-core-concepts.ts",
+    "course4": "npx tsx courses/04-schemas.ts",
+    "course5": "npx tsx courses/05-entities.ts",
+    "course6": "npx tsx courses/06-relations.ts",
+    "course7": "npx tsx courses/07-edits.ts",
+    "course8": "npx tsx courses/08-publishing.ts",
+    "course9": "npx tsx courses/09-smart-accounts.ts",
+    "course10": "npx tsx courses/10-dao-governance.ts",
+    "course11": "npx tsx courses/11-advanced-blocks.ts",
+    "course12": "npx tsx courses/12-updates-and-deletes.ts",
+    "course13": "npx tsx courses/13-batch-import.ts",
+    "capstone": "npx tsx courses/14-capstone.ts",
+    "query": "npx tsx quick-query.ts",
+    "publish": "npx tsx quick-publish.ts",
+    "typecheck": "npx tsc --noEmit"
   },
   "dependencies": {
-    "@geoprotocol/geo-sdk": "^0.7.0"
+    "@geoprotocol/geo-sdk": "^0.7.0",
+    "dotenv": "^17.2.4"
   },
   "devDependencies": {
     "@types/node": "^25.2.2",

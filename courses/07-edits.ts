@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * COURSE 6: Understanding Operations and Edits
+ * COURSE 7: Understanding Operations and Edits
  * ============================================================================
  *
  * OBJECTIVE: Learn how operations are grouped into Edits, understanding
@@ -41,7 +41,7 @@ import type { Op } from "@geoprotocol/geo-sdk";
  * succeed or fail together.
  */
 
-console.log("=== Course 6: Operations and Edits ===\n");
+console.log("=== Course 7: Operations and Edits ===\n");
 
 // =============================================================================
 // UNDERSTANDING OPERATIONS
@@ -228,11 +228,11 @@ console.log(`
   │     createEdit("name", [...ops1, ...ops2])                  │
   │           │                                                 │
   │           ▼                                                 │
-  │  3. PUBLISH TO IPFS  (Course 7)                             │
+  │  3. PUBLISH TO IPFS  (Course 8)                             │
   │     Ipfs.publishEdit(edit) → CID                            │
   │           │                                                 │
   │           ▼                                                 │
-  │  4. SUBMIT ON-CHAIN  (Course 7)                             │
+  │  4. SUBMIT ON-CHAIN  (Course 8)                             │
   │     personalSpace.publishEdit(cid)                          │
   │           │                                                 │
   │           ▼                                                 │
@@ -261,6 +261,6 @@ console.log(`\nTotal operations to submit: ${totalOps}`);
 // =============================================================================
 console.log("\n--- What's Next? ---");
 console.log("Edits are ready locally, but to persist them in the decentralized");
-console.log("knowledge graph, they need to be PUBLISHED. Course 7 covers");
+console.log("knowledge graph, they need to be PUBLISHED. Course 8 covers");
 console.log("IPFS Publishing and Personal Spaces.");
-console.log("\nRun: npm run course7");
+console.log("\nRun: npm run course8");

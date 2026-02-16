@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * COURSE 4: Creating Entities - Your First Real Data
+ * COURSE 5: Creating Entities - Your First Real Data
  * ============================================================================
  *
  * OBJECTIVE: Learn to create entities with values and understand how
@@ -34,7 +34,7 @@ import type { Id } from "@geoprotocol/geo-sdk";
  * - Values for its properties (using TypedValue format)
  */
 
-console.log("=== Course 4: Creating Entities ===\n");
+console.log("=== Course 5: Creating Entities ===\n");
 
 // =============================================================================
 // SETUP: Create schema first (from previous courses)
@@ -219,7 +219,7 @@ console.log(`Book IDs: ${entities.books.length} books created`);
 // WHAT'S NEXT?
 // =============================================================================
 console.log("\n--- What's Next? ---");
-console.log("You have entities, but they're isolated. In Course 5, you'll learn");
+console.log("You have entities, but they're isolated. In Course 6, you'll learn");
 console.log("to create RELATIONS - connections that link entities together into");
 console.log("a true knowledge graph.");
-console.log("\nRun: npm run course5");
+console.log("\nRun: npm run course6");

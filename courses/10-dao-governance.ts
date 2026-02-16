@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * COURSE 9: DAO Spaces and Collaborative Governance
+ * COURSE 10: DAO Spaces and Collaborative Governance
  * ============================================================================
  *
  * OBJECTIVE: Learn to propose edits to DAO-governed spaces and understand
@@ -15,24 +15,22 @@
  *
  * REQUIREMENTS:
  * - Set PRIVATE_KEY environment variable (export from https://www.geobrowser.io/export-wallet)
- * - Set DAO_SPACE_ADDRESS environment variable (the DAO space contract address)
- * - Set DAO_SPACE_ID environment variable (the DAO space ID as bytes16 hex)
+ * - Set DAO_SPACE_ID environment variable (the DAO space ID, 32-char hex without dashes)
  * - Your personal space ID is needed as the caller (proposer)
+ *
+ * NOTE: This course uses the shared utilities from src/functions.ts.
+ * The publishOps() helper auto-detects DAO spaces and uses daoSpace.proposeEdit().
  *
  * ============================================================================
  */
 
-import { createPublicClient, type Hex, http } from "viem";
-import {
-  Graph,
-  personalSpace,
-  daoSpace,
-  getSmartAccountWalletClient,
-  TESTNET_RPC_URL,
-} from "@geoprotocol/geo-sdk";
-import { SpaceRegistryAbi } from "@geoprotocol/geo-sdk/abis";
-import { TESTNET } from "@geoprotocol/geo-sdk/contracts";
+import "dotenv/config";
+import { Graph } from "@geoprotocol/geo-sdk";
 import type { Op } from "@geoprotocol/geo-sdk";
+
+// Import shared utilities and constants
+import { publishOps, printOpsSummary } from "../src/functions.js";
+import { TYPES, PROPERTIES } from "../src/constants.js";
 
 /**
  * EXPLANATION:
@@ -49,7 +47,7 @@ import type { Op } from "@geoprotocol/geo-sdk";
  * 4. PLURALISM - Different perspectives can coexist
  */
 
-console.log("=== Course 9: DAO Spaces and Collaborative Governance ===\n");
+console.log("=== Course 10: DAO Spaces and Collaborative Governance ===\n");
 
 // =============================================================================
 // COMPARING SPACE TYPES
@@ -135,25 +133,29 @@ console.log(`
 // =============================================================================
 /**
  * CHALLENGE:
- * Create a complete workflow for contributing to a DAO space:
- * 1. Prepare an edit with operations
- * 2. Propose it to the DAO using daoSpace.proposeEdit()
- * 3. Submit the proposal transaction
+ * Create a complete workflow for contributing to a DAO space using
+ * the publishOps() helper which auto-detects DAO spaces.
+ *
+ * The helper queries the API to detect if the target space is a DAO,
+ * then uses daoSpace.proposeEdit() instead of personalSpace.publishEdit().
  *
  * Try it yourself first, then scroll down for the solution!
  */
 
 // YOUR CODE HERE:
 // async function proposeToDAO(
-//   daoSpaceAddress: `0x${string}`,
-//   daoSpaceId: `0x${string}`,
-//   callerSpaceId: `0x${string}`,
+//   daoSpaceId: string,
 //   ops: Op[],
-//   author: `0x${string}`,
+//   editName: string,
 //   privateKey: `0x${string}`
 // ) {
-//   // Call daoSpace.proposeEdit() to publish edit and get proposal calldata
-//   // Submit transaction via smart account
+//   const result = await publishOps({
+//     ops,
+//     editName,
+//     privateKey,
+//     spaceId: daoSpaceId, // Target the DAO space
+//   });
+//   return result;
 // }
 
 // =============================================================================
@@ -162,115 +164,51 @@ console.log(`
 
 console.log("--- Challenge Solution: DAO Contribution Workflow ---\n");
 
-interface ContributionResult {
-  success: boolean;
-  proposalId?: string;
-  editId?: string;
-  cid?: string;
-  txHash?: string;
-  error?: string;
-}
-
 /**
- * Propose an edit to a DAO space.
+ * Propose an edit to a DAO space using the publishOps() helper.
  *
- * This function:
- * 1. Gets smart account for the proposer
- * 2. Looks up the proposer's personal space ID
- * 3. Calls daoSpace.proposeEdit() to publish to IPFS and get proposal calldata
- * 4. Submits the proposal transaction
+ * The publishOps() function in src/functions.ts handles:
+ * 1. Creating wallet client (smart account by default)
+ * 2. Ensuring caller has a personal space
+ * 3. Querying the API to detect if target is a DAO space
+ * 4. If DAO: uses daoSpace.proposeEdit() with proper membership checks
+ * 5. If Personal: uses personalSpace.publishEdit()
+ * 6. Submitting the transaction
  *
- * Note: The proposal then goes through the DAO's voting process.
- * If approved, the edit is automatically applied to the DAO space.
+ * This is much simpler than the manual implementation!
  */
 async function proposeToDAOSpace(
-  daoSpaceAddress: `0x${string}`,
-  daoSpaceId: `0x${string}`,
+  daoSpaceId: string,
   operations: Op[],
   editName: string,
   privateKey: `0x${string}`
-): Promise<ContributionResult> {
+) {
   console.log("╔═══════════════════════════════════════════════════════════╗");
   console.log("║              DAO SPACE CONTRIBUTION                       ║");
   console.log("╚═══════════════════════════════════════════════════════════╝\n");
 
-  console.log(`Target DAO Space: ${daoSpaceAddress}`);
+  console.log(`Target DAO Space: ${daoSpaceId}`);
   console.log(`Proposal: "${editName}"`);
+  console.log("\nUsing publishOps() helper from src/functions.ts\n");
 
-  try {
-    // Step 1: Get smart account
-    console.log("\n[Step 1/4] Preparing contributor account...");
-    const smartAccount = await getSmartAccountWalletClient({ privateKey });
-    const contributorAddress = smartAccount.account.address;
-    console.log(`  ✓ Contributor: ${contributorAddress.slice(0, 15)}...${contributorAddress.slice(-6)}`);
+  const result = await publishOps({
+    ops: operations,
+    editName,
+    privateKey,
+    spaceId: daoSpaceId, // Target the DAO space
+    useSmartAccount: true, // Gas-sponsored
+    network: "TESTNET",
+  });
 
-    // Create public client for reading contract state
-    const publicClient = createPublicClient({
-      transport: http(TESTNET_RPC_URL),
-    });
-
-    // Step 2: Look up the contributor's personal space ID
-    console.log("\n[Step 2/4] Looking up contributor's space ID...");
-
-    // First check if contributor has a personal space
-    const hasSpace = await personalSpace.hasSpace({ address: contributorAddress });
-    if (!hasSpace) {
-      throw new Error("Contributor must have a personal space to propose to a DAO");
-    }
-
-    const callerSpaceIdHex = (await publicClient.readContract({
-      address: TESTNET.SPACE_REGISTRY_ADDRESS,
-      abi: SpaceRegistryAbi,
-      functionName: "addressToSpaceId",
-      args: [contributorAddress],
-    })) as Hex;
-
-    // Ensure it's in the right format (0x + 32 hex chars)
-    const callerSpaceId = callerSpaceIdHex.slice(0, 34).toLowerCase() as `0x${string}`;
-    console.log(`  ✓ Caller Space ID: ${callerSpaceId}`);
-
-    // Step 3: Create proposal using daoSpace.proposeEdit()
-    console.log("\n[Step 3/4] Publishing edit and creating proposal...");
-    console.log("  Note: This creates a governance proposal, not an immediate edit");
-
-    const { editId, cid, to, calldata, proposalId } = await daoSpace.proposeEdit({
-      name: editName,
-      ops: operations,
-      author: contributorAddress,
-      daoSpaceAddress,
-      callerSpaceId,
-      daoSpaceId,
-      votingMode: "FAST", // publish() is a valid fast-path action
-      network: "TESTNET",
-    });
-
-    console.log(`  ✓ Edit ID: ${editId}`);
-    console.log(`  ✓ CID: ${cid}`);
-    console.log(`  ✓ Proposal ID: ${proposalId}`);
-
-    // Step 4: Submit the proposal transaction
-    console.log("\n[Step 4/4] Submitting proposal transaction...");
-    const txHash = await smartAccount.sendTransaction({
-      to,
-      data: calldata,
-    });
-
-    console.log(`  ✓ Transaction: ${txHash}`);
-
-    // Wait for confirmation
-    const receipt = await publicClient.waitForTransactionReceipt({
-      hash: txHash,
-    });
-    console.log(`  ✓ Confirmed in block ${receipt.blockNumber}`);
-
+  if (result.success) {
     console.log(`
   ┌─────────────────────────────────────────────────────────────────┐
   │                      PROPOSAL CREATED                           │
   ├─────────────────────────────────────────────────────────────────┤
   │                                                                 │
-  │  Proposal ID: ${proposalId.padEnd(46)}│
-  │  Edit ID: ${editId.padEnd(51)}│
-  │  CID: ${cid.padEnd(55)}│
+  │  Edit ID: ${(result.editId || "").padEnd(51)}│
+  │  CID: ${(result.cid || "").padEnd(55)}│
+  │  Transaction: ${(result.transactionHash?.slice(0, 20) || "").padEnd(42)}│
   │  Status: SUBMITTED (awaiting votes)                             │
   │                                                                 │
   │  Next Steps:                                                    │
@@ -281,71 +219,63 @@ async function proposeToDAOSpace(
   │                                                                 │
   └─────────────────────────────────────────────────────────────────┘
     `);
-
-    return {
-      success: true,
-      proposalId,
-      editId,
-      cid,
-      txHash,
-    };
-  } catch (error) {
-    const errorMessage =
-      error instanceof Error ? error.message : "Unknown error";
-    console.error(`\n[ERROR] Proposal failed: ${errorMessage}`);
-
-    return {
-      success: false,
-      error: errorMessage,
-    };
+  } else {
+    console.error(`\n[ERROR] Proposal failed: ${result.error}`);
   }
+
+  return result;
 }
+
+// =============================================================================
+// CREATE SAMPLE OPERATIONS
+// =============================================================================
+
+// Create sample operations using ROOT SPACE types and properties
+// This is the recommended pattern - reuse existing types!
+
+// Create a topic entity
+const topicResult = Graph.createEntity({
+  name: "Decentralized Governance",
+  types: [TYPES.topic],
+  description: "Systems for community-driven decision making",
+});
+
+// Create a project entity with proper root space types
+const projectResult = Graph.createEntity({
+  name: "Community Wiki",
+  types: [TYPES.project],
+  description: "A collaboratively curated knowledge base",
+  values: [
+    { property: PROPERTIES.web_url, type: "text", value: "https://example.com/wiki" },
+  ],
+});
+
+// Create a relation connecting project to topic
+const relationResult = Graph.createRelation({
+  fromEntity: projectResult.id,
+  toEntity: topicResult.id,
+  type: PROPERTIES.topics,
+});
+
+// Collect all operations - note: no custom types or properties needed!
+const allOps: Op[] = [
+  ...topicResult.ops,
+  ...projectResult.ops,
+  ...relationResult.ops,
+];
+
+console.log(`Created ${allOps.length} operations for proposal`);
+printOpsSummary(allOps);
 
 // =============================================================================
 // RUN THE EXAMPLE
 // =============================================================================
 
-// Create sample operations for a book
-const titlePropResult = Graph.createProperty({
-  name: "Title",
-  dataType: "TEXT",
-});
-
-const authorPropResult = Graph.createProperty({
-  name: "Author",
-  dataType: "TEXT",
-});
-
-const bookTypeResult = Graph.createType({
-  name: "Book",
-  properties: [titlePropResult.id, authorPropResult.id],
-});
-
-const bookEntityResult = Graph.createEntity({
-  name: "Sapiens: A Brief History of Humankind",
-  types: [bookTypeResult.id],
-  values: [
-    { property: titlePropResult.id, type: "text", value: "Sapiens: A Brief History of Humankind" },
-    { property: authorPropResult.id, type: "text", value: "Yuval Noah Harari" },
-  ],
-});
-
-// Collect all operations
-const allOps: Op[] = [
-  ...titlePropResult.ops,
-  ...authorPropResult.ops,
-  ...bookTypeResult.ops,
-  ...bookEntityResult.ops,
-];
-
-console.log(`\nCreated ${allOps.length} operations for proposal\n`);
-
 // Check for required environment variables
 const PRIVATE_KEY = process.env.PRIVATE_KEY as `0x${string}` | undefined;
-const DAO_SPACE_ADDRESS = process.env.DAO_SPACE_ADDRESS as `0x${string}` | undefined;
-const DAO_SPACE_ID = process.env.DAO_SPACE_ID as `0x${string}` | undefined;
+const DAO_SPACE_ID = process.env.DAO_SPACE_ID as string | undefined;
 
-if (!PRIVATE_KEY || !DAO_SPACE_ADDRESS || !DAO_SPACE_ID) {
+if (!PRIVATE_KEY || !DAO_SPACE_ID) {
   console.log(`
   ┌─────────────────────────────────────────────────────────────┐
   │                    CONFIGURATION NEEDED                     │
@@ -354,14 +284,13 @@ if (!PRIVATE_KEY || !DAO_SPACE_ADDRESS || !DAO_SPACE_ID) {
   │  To run this example, set these environment variables:      │
   │                                                             │
   │  export PRIVATE_KEY="0x..."                                 │
-  │  export DAO_SPACE_ADDRESS="0x..."  # DAO contract address   │
-  │  export DAO_SPACE_ID="0x..."       # DAO space ID (bytes16) │
+  │  export DAO_SPACE_ID="..."  # 32-char hex (no dashes)       │
   │                                                             │
   │  Get your private key from:                                 │
   │  https://www.geobrowser.io/export-wallet                    │
   │                                                             │
-  │  The DAO space address and ID can be found in the           │
-  │  Geo Browser for existing DAO spaces.                       │
+  │  The DAO space ID can be found in the Geo Browser URL       │
+  │  for existing DAO spaces.                                   │
   │                                                             │
   │  Skipping live proposal demo...                             │
   │                                                             │
@@ -370,7 +299,6 @@ if (!PRIVATE_KEY || !DAO_SPACE_ADDRESS || !DAO_SPACE_ID) {
 } else {
   // Run the proposal
   await proposeToDAOSpace(
-    DAO_SPACE_ADDRESS,
     DAO_SPACE_ID,
     allOps,
     "Add 'Sapiens' by Yuval Noah Harari",
@@ -382,77 +310,75 @@ if (!PRIVATE_KEY || !DAO_SPACE_ADDRESS || !DAO_SPACE_ID) {
 // CODE SUMMARY
 // =============================================================================
 
-console.log("--- Code Summary (from official SDK) ---\n");
+console.log("--- Code Summary (using shared helper) ---\n");
 console.log(`
-  import { createPublicClient, type Hex, http } from "viem";
-  import {
-    Graph,
-    personalSpace,
-    daoSpace,
-    getSmartAccountWalletClient,
-    TESTNET_RPC_URL,
-  } from "@geoprotocol/geo-sdk";
-  import { SpaceRegistryAbi } from "@geoprotocol/geo-sdk/abis";
-  import { TESTNET } from "@geoprotocol/geo-sdk/contracts";
+  // Using the shared publishOps() helper (recommended):
 
-  // Get smart account
-  const smartAccount = await getSmartAccountWalletClient({ privateKey });
-  const contributorAddress = smartAccount.account.address;
+  import { Graph } from "@geoprotocol/geo-sdk";
+  import { publishOps } from "../src/functions.js";
 
-  // Look up contributor's personal space ID (required to propose)
-  const publicClient = createPublicClient({ transport: http(TESTNET_RPC_URL) });
-  const callerSpaceIdHex = await publicClient.readContract({
-    address: TESTNET.SPACE_REGISTRY_ADDRESS,
-    abi: SpaceRegistryAbi,
-    functionName: "addressToSpaceId",
-    args: [contributorAddress],
+  // Create your operations
+  const { ops } = Graph.createEntity({
+    name: "My Entity",
+    description: "Created via SDK",
   });
-  const callerSpaceId = callerSpaceIdHex.slice(0, 34).toLowerCase();
 
-  // Create operations
-  const { ops } = Graph.createEntity({ name: "My Entity" });
-
-  // Create proposal (publishes to IPFS and returns proposal calldata)
-  const { editId, cid, to, calldata, proposalId } = await daoSpace.proposeEdit({
-    name: "My Proposal",
+  // Propose to DAO with one function call!
+  // The helper auto-detects DAO spaces and uses daoSpace.proposeEdit()
+  const result = await publishOps({
     ops,
-    author: contributorAddress,
-    daoSpaceAddress,       // DAO space contract address
-    callerSpaceId,         // Your personal space ID
-    daoSpaceId,            // Target DAO space ID
-    votingMode: "FAST",    // or "SLOW" for standard voting
+    editName: "My DAO Proposal",
+    privateKey: PRIVATE_KEY,
+    spaceId: DAO_SPACE_ID,     // Target the DAO space
+    useSmartAccount: true,     // Gas-sponsored (default)
     network: "TESTNET",
   });
 
-  // Submit the proposal transaction
-  const txHash = await smartAccount.sendTransaction({ to, data: calldata });
+  console.log("Edit ID:", result.editId);
+  console.log("CID:", result.cid);
+  console.log("Transaction:", result.transactionHash);
+
+  // ─────────────────────────────────────────────────────────────
+  // Under the hood, publishOps() does:
+  // 1. Query API to detect space type (PERSONAL vs DAO)
+  // 2. If DAO: lookup caller's personal space ID
+  // 3. Verify caller is member/editor of DAO
+  // 4. Call daoSpace.proposeEdit() → creates governance proposal
+  // 5. Submit transaction via smart account
+  //
+  // See src/functions.ts for the full implementation!
+  // ─────────────────────────────────────────────────────────────
 `);
 
 // =============================================================================
-// CURRICULUM COMPLETE!
+// WHAT'S NEXT?
 // =============================================================================
 
 console.log(`
 ╔═══════════════════════════════════════════════════════════════════╗
-║                    CURRICULUM COMPLETE!                           ║
+║                    CORE CURRICULUM COMPLETE!                      ║
 ╠═══════════════════════════════════════════════════════════════════╣
 ║                                                                   ║
-║  You've completed all 9 courses! You now understand:              ║
+║  You've completed courses 1-10! You now understand:               ║
 ║                                                                   ║
-║  1. IDs          - Global unique identifiers                      ║
-║  2. Properties   - Data type definitions                          ║
-║  3. Types        - Entity schemas                                 ║
-║  4. Entities     - Actual data instances                          ║
-║  5. Relations    - Connections between entities                   ║
-║  6. Edits        - Grouped operations                             ║
-║  7. Publishing   - IPFS + Personal Spaces                         ║
-║  8. Smart Accts  - Gas-sponsored transactions                     ║
-║  9. DAO Spaces   - Community governance                           ║
-║                                                                   ║
-║  Ready for the final challenge?                                   ║
-║  Build a complete application in the Capstone Project!            ║
+║  1. Overview       - Knowledge Graph architecture                 ║
+║  2. Reading Data   - GraphQL queries                              ║
+║  3. Core Concepts  - IDs, Properties, Types, Entities, Relations  ║
+║  4. Schemas        - Defining data structures                     ║
+║  5. Entities       - Creating data instances                      ║
+║  6. Relations      - Connecting entities                          ║
+║  7. Edits          - Grouping operations                          ║
+║  8. Publishing     - IPFS + Personal Spaces                       ║
+║  9. Smart Accounts - Gas-sponsored transactions                   ║
+║  10. DAO Spaces    - Community governance                         ║
 ║                                                                   ║
 ╚═══════════════════════════════════════════════════════════════════╝
 `);
 
-console.log("Run: npm run capstone");
+console.log("--- What's Next? ---");
+console.log("Continue with ADVANCED PATTERNS in courses 11-13:");
+console.log("  • Course 11: Advanced Blocks (text, data, images)");
+console.log("  • Course 12: Updates & Deletes (modify and remove data)");
+console.log("  • Course 13: Batch Import (external data sources)");
+console.log("\nThen complete the CAPSTONE project in Course 14!");
+console.log("\nRun: npm run course11");

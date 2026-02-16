@@ -1,10 +1,10 @@
 /**
  * ============================================================================
- * CAPSTONE PROJECT: Collaborative Recipe Book
+ * COURSE 14: CAPSTONE PROJECT - Collaborative Recipe Book
  * ============================================================================
  *
  * OBJECTIVE: Build a complete application that combines ALL concepts from
- * the Geo SDK curriculum - from IDs to DAO governance.
+ * the Geo SDK curriculum - from reading data to DAO governance.
  *
  * YOU WILL BUILD:
  * - Schema Design: Recipe, Ingredient, Chef types with properties
@@ -15,25 +15,23 @@
  *
  * REQUIREMENTS:
  * - Set PRIVATE_KEY environment variable (export from https://www.geobrowser.io/export-wallet)
- * - Optionally set DAO_SPACE_ADDRESS and DAO_SPACE_ID for DAO proposal demo
+ * - Optionally set DAO_SPACE_ID for DAO proposal demo
+ *
+ * NOTE: This capstone uses the shared utilities from src/functions.ts.
+ * See that file for the full implementation details of publishOps().
  *
  * ============================================================================
  */
 
-import { createPublicClient, type Hex, http } from "viem";
-import {
-  Graph,
-  personalSpace,
-  daoSpace,
-  getSmartAccountWalletClient,
-  TESTNET_RPC_URL,
-} from "@geoprotocol/geo-sdk";
-import { SpaceRegistryAbi } from "@geoprotocol/geo-sdk/abis";
-import { TESTNET } from "@geoprotocol/geo-sdk/contracts";
+import "dotenv/config";
+import { Graph } from "@geoprotocol/geo-sdk";
 import type { Op, Id } from "@geoprotocol/geo-sdk";
 
+// Import shared utilities - see src/functions.ts for implementation details
+import { publishOps, printOpsSummary, type PublishResult } from "../src/functions.js";
+
 console.log("╔═══════════════════════════════════════════════════════════════╗");
-console.log("║        CAPSTONE PROJECT: Collaborative Recipe Book           ║");
+console.log("║   COURSE 14: CAPSTONE PROJECT - Collaborative Recipe Book    ║");
 console.log("╚═══════════════════════════════════════════════════════════════╝\n");
 
 // =============================================================================
@@ -77,6 +75,20 @@ interface SchemaResult {
 function createRecipeBookSchema(): SchemaResult {
   console.log("Creating properties for Recipe Book...\n");
 
+  /**
+   * NOTE: Unlike earlier courses where we reuse root space types (TYPES.person,
+   * TYPES.project, etc.), this capstone creates CUSTOM types and properties
+   * because we're building a domain-specific Recipe Book application.
+   *
+   * When to REUSE (from root space):
+   * - Generic concepts that exist: Person, Project, Topic, Organization
+   * - Common properties: name, description, web_url
+   *
+   * When to CREATE NEW:
+   * - Domain-specific types: Recipe, Ingredient, Chef
+   * - Domain-specific properties: Prep Time, Servings, Difficulty
+   */
+
   const allOps: Op[] = [];
 
   // ========== RECIPE PROPERTIES ==========
@@ -119,7 +131,7 @@ function createRecipeBookSchema(): SchemaResult {
     ...relationNameResult.ops
   );
 
-  console.log(`  ✓ Created 14 properties`);
+  console.log(`  Created 14 properties`);
 
   // ========== TYPES ==========
   console.log("\nCreating types...\n");
@@ -160,10 +172,10 @@ function createRecipeBookSchema(): SchemaResult {
     ...relationTypeResult.ops
   );
 
-  console.log("  ✓ Recipe Type (7 properties)");
-  console.log("  ✓ Ingredient Type (3 properties)");
-  console.log("  ✓ Chef Type (3 properties)");
-  console.log("  ✓ Relation Type (1 property)");
+  console.log("  Recipe Type (7 properties)");
+  console.log("  Ingredient Type (3 properties)");
+  console.log("  Chef Type (3 properties)");
+  console.log("  Relation Type (1 property)");
 
   // ========== RELATION TYPES ==========
   console.log("\nCreating relation types...\n");
@@ -187,8 +199,8 @@ function createRecipeBookSchema(): SchemaResult {
   // Collect relation type ops
   allOps.push(...usesRelationResult.ops, ...createdByRelationResult.ops);
 
-  console.log("  ✓ 'Uses Ingredient' relation type");
-  console.log("  ✓ 'Created By' relation type");
+  console.log("  'Uses Ingredient' relation type");
+  console.log("  'Created By' relation type");
 
   console.log(`
   ┌─────────────────────────────────────────────────────────────────┐
@@ -298,7 +310,7 @@ function createRecipe(
     ],
   });
   allOps.push(...chefResult.ops);
-  console.log(`  ✓ Chef: ${chef.name}`);
+  console.log(`  Chef: ${chef.name}`);
 
   // ========== CREATE RECIPE ==========
   const recipeResult = Graph.createEntity({
@@ -315,7 +327,7 @@ function createRecipe(
     ],
   });
   allOps.push(...recipeResult.ops);
-  console.log(`  ✓ Recipe: ${recipe.name}`);
+  console.log(`  Recipe: ${recipe.name}`);
 
   // ========== CONNECT RECIPE TO CHEF ==========
   const recipeToChefRelation = Graph.createRelation({
@@ -324,7 +336,7 @@ function createRecipe(
     type: relationTypes.createdBy,
   });
   allOps.push(...recipeToChefRelation.ops);
-  console.log(`  ✓ Relation: Recipe --[Created By]--> Chef`);
+  console.log(`  Relation: Recipe --[Created By]--> Chef`);
 
   // ========== CREATE INGREDIENTS AND RELATIONS ==========
   console.log(`\n  Creating ${ingredients.length} ingredients...`);
@@ -350,7 +362,7 @@ function createRecipe(
     });
     allOps.push(...recipeToIngRelation.ops);
 
-    console.log(`    ✓ ${ing.quantity} ${ing.unit} ${ing.name}`);
+    console.log(`    ${ing.quantity} ${ing.unit} ${ing.name}`);
   }
 
   return {
@@ -405,15 +417,16 @@ console.log("\n═════════════════════�
 console.log("  PART 3: Publishing to Personal Space");
 console.log("═══════════════════════════════════════════════════════════════\n");
 
-interface PublishResult {
-  success: boolean;
-  spaceId?: string;
-  editId?: string;
-  cid?: string;
-  txHash?: string;
-  error?: string;
-}
-
+/**
+ * Publish recipe to personal space using the shared helper.
+ *
+ * The publishOps() function handles:
+ * 1. Creating smart account wallet client (gas-sponsored by default)
+ * 2. Checking if personal space exists, creating if not
+ * 3. Looking up space ID from registry
+ * 4. Publishing to IPFS via personalSpace.publishEdit()
+ * 5. Submitting transaction on-chain
+ */
 async function publishRecipeToPersonalSpace(
   schemaOps: Op[],
   recipeOps: Op[],
@@ -421,77 +434,27 @@ async function publishRecipeToPersonalSpace(
 ): Promise<PublishResult> {
   const allOperations = [...schemaOps, ...recipeOps];
 
-  console.log(`Publishing ${allOperations.length} operations...\n`);
+  console.log(`Publishing ${allOperations.length} operations...`);
+  console.log("\nUsing publishOps() helper from src/functions.ts\n");
 
-  try {
-    // Step 1: Create smart account
-    console.log("[1/4] Creating smart account...");
-    const smartAccount = await getSmartAccountWalletClient({ privateKey });
-    const smartAccountAddress = smartAccount.account.address;
-    console.log(`  ✓ Smart Account: ${smartAccountAddress.slice(0, 15)}...${smartAccountAddress.slice(-6)}`);
-    console.log("  ✓ Gas sponsorship: ENABLED");
+  const result = await publishOps({
+    ops: allOperations,
+    editName: "Recipe Book: Classic Margherita Pizza",
+    privateKey,
+    useSmartAccount: true, // Gas-sponsored
+    network: "TESTNET",
+  });
 
-    // Create public client
-    const publicClient = createPublicClient({
-      transport: http(TESTNET_RPC_URL),
-    });
-
-    // Step 2: Check/create personal space
-    console.log("\n[2/4] Checking personal space...");
-    const hasSpace = await personalSpace.hasSpace({ address: smartAccountAddress });
-
-    if (!hasSpace) {
-      console.log("  Creating personal space...");
-      const { to, calldata } = personalSpace.createSpace();
-      const createTx = await smartAccount.sendTransaction({ to, data: calldata });
-      await publicClient.waitForTransactionReceipt({ hash: createTx });
-      console.log(`  ✓ Personal space created`);
-    } else {
-      console.log("  ✓ Personal space exists");
-    }
-
-    // Look up space ID
-    const spaceIdHex = (await publicClient.readContract({
-      address: TESTNET.SPACE_REGISTRY_ADDRESS,
-      abi: SpaceRegistryAbi,
-      functionName: "addressToSpaceId",
-      args: [smartAccountAddress],
-    })) as Hex;
-    const spaceId = spaceIdHex.slice(2, 34).toLowerCase();
-    console.log(`  ✓ Space ID: ${spaceId}`);
-
-    // Step 3: Publish to IPFS
-    console.log("\n[3/4] Publishing to IPFS...");
-    const { cid, editId, to, calldata } = await personalSpace.publishEdit({
-      name: "Recipe Book: Classic Margherita Pizza",
-      spaceId,
-      ops: allOperations,
-      author: smartAccountAddress,
-      network: "TESTNET",
-    });
-    console.log(`  ✓ Edit ID: ${editId}`);
-    console.log(`  ✓ CID: ${cid}`);
-
-    // Step 4: Submit on-chain
-    console.log("\n[4/4] Submitting to blockchain...");
-    const txHash = await smartAccount.sendTransaction({ to, data: calldata });
-    console.log(`  ✓ Transaction: ${txHash}`);
-
-    const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
-    console.log(`  ✓ Confirmed in block ${receipt.blockNumber}`);
-
-    return {
-      success: true,
-      spaceId,
-      editId,
-      cid,
-      txHash,
-    };
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
-    console.error(`\n[ERROR] Publishing failed: ${errorMessage}`);
-    return { success: false, error: errorMessage };
+  if (result.success) {
+    console.log(`  Space ID: ${result.spaceId}`);
+    console.log(`  Edit ID: ${result.editId}`);
+    console.log(`  CID: ${result.cid}`);
+    console.log(`  Transaction: ${result.transactionHash}`);
+  } else {
+    console.error(`\n[ERROR] Publishing failed: ${result.error}`);
   }
+
+  return result;
 }
 
 // =============================================================================
@@ -502,102 +465,64 @@ console.log("══════════════════════�
 console.log("  PART 4: Proposing to Community Recipe DAO");
 console.log("═══════════════════════════════════════════════════════════════\n");
 
-interface DAOProposalResult {
-  success: boolean;
-  proposalId?: string;
-  editId?: string;
-  cid?: string;
-  txHash?: string;
-  error?: string;
-}
-
+/**
+ * Propose recipe to DAO using the shared helper.
+ *
+ * The publishOps() function auto-detects DAO spaces and:
+ * 1. Queries the API to detect space type
+ * 2. Looks up caller's personal space ID
+ * 3. Verifies caller is member/editor of DAO
+ * 4. Uses daoSpace.proposeEdit() for DAO spaces
+ * 5. Submits the proposal transaction
+ */
 async function proposeRecipeToDAO(
   schemaOps: Op[],
   recipeOps: Op[],
-  daoSpaceAddress: `0x${string}`,
-  daoSpaceId: `0x${string}`,
+  daoSpaceId: string,
   privateKey: `0x${string}`
-): Promise<DAOProposalResult> {
+): Promise<PublishResult> {
   const allOperations = [...schemaOps, ...recipeOps];
 
-  console.log("Creating proposal for community featured recipes...\n");
+  console.log("Creating proposal for community featured recipes...");
+  console.log("\nUsing publishOps() helper (auto-detects DAO space)\n");
 
-  try {
-    // Step 1: Get smart account
-    console.log("[1/3] Preparing proposal...");
-    const smartAccount = await getSmartAccountWalletClient({ privateKey });
-    const contributorAddress = smartAccount.account.address;
-    console.log(`  ✓ Contributor: ${contributorAddress.slice(0, 15)}...${contributorAddress.slice(-6)}`);
+  const result = await publishOps({
+    ops: allOperations,
+    editName: "Add Classic Margherita Pizza Recipe",
+    privateKey,
+    spaceId: daoSpaceId, // Target the DAO space
+    useSmartAccount: true, // Gas-sponsored
+    network: "TESTNET",
+  });
 
-    // Create public client
-    const publicClient = createPublicClient({
-      transport: http(TESTNET_RPC_URL),
-    });
-
-    // Look up caller's space ID
-    const hasSpace = await personalSpace.hasSpace({ address: contributorAddress });
-    if (!hasSpace) {
-      throw new Error("Must have a personal space to propose to DAO");
-    }
-
-    const callerSpaceIdHex = (await publicClient.readContract({
-      address: TESTNET.SPACE_REGISTRY_ADDRESS,
-      abi: SpaceRegistryAbi,
-      functionName: "addressToSpaceId",
-      args: [contributorAddress],
-    })) as Hex;
-    const callerSpaceId = callerSpaceIdHex.slice(0, 34).toLowerCase() as `0x${string}`;
-    console.log(`  ✓ Caller Space: ${callerSpaceId}`);
-
-    // Step 2: Create proposal
-    console.log("\n[2/3] Submitting to DAO...");
-    const { editId, cid, to, calldata, proposalId } = await daoSpace.proposeEdit({
-      name: "Add Classic Margherita Pizza Recipe",
-      ops: allOperations,
-      author: contributorAddress,
-      daoSpaceAddress,
-      callerSpaceId,
-      daoSpaceId,
-      votingMode: "FAST",
-      network: "TESTNET",
-    });
-
-    console.log(`  ✓ Edit ID: ${editId}`);
-    console.log(`  ✓ CID: ${cid}`);
-    console.log(`  ✓ Proposal ID: ${proposalId}`);
-
-    // Step 3: Submit proposal transaction
-    console.log("\n[3/3] Submitting proposal transaction...");
-    const txHash = await smartAccount.sendTransaction({ to, data: calldata });
-    console.log(`  ✓ Transaction: ${txHash}`);
-
-    const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
-    console.log(`  ✓ Confirmed in block ${receipt.blockNumber}`);
-
-    return {
-      success: true,
-      proposalId,
-      editId,
-      cid,
-      txHash,
-    };
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
-    console.error(`\n[ERROR] Proposal failed: ${errorMessage}`);
-    return { success: false, error: errorMessage };
+  if (result.success) {
+    console.log(`  Edit ID: ${result.editId}`);
+    console.log(`  CID: ${result.cid}`);
+    console.log(`  Transaction: ${result.transactionHash}`);
+  } else {
+    console.error(`\n[ERROR] Proposal failed: ${result.error}`);
   }
+
+  return result;
 }
+
+// =============================================================================
+// OPERATION SUMMARY
+// =============================================================================
+
+console.log("--- Operation Summary ---\n");
+const allOperations = [...schema.ops, ...margheritaPizza.ops];
+printOpsSummary(allOperations);
 
 // =============================================================================
 // RUN THE CAPSTONE
 // =============================================================================
 
 const PRIVATE_KEY = process.env.PRIVATE_KEY as `0x${string}` | undefined;
-const DAO_SPACE_ADDRESS = process.env.DAO_SPACE_ADDRESS as `0x${string}` | undefined;
-const DAO_SPACE_ID = process.env.DAO_SPACE_ID as `0x${string}` | undefined;
+const DAO_SPACE_ID = process.env.DAO_SPACE_ID as string | undefined;
 
 let personalResult: PublishResult = { success: false };
-let daoProposalResult: DAOProposalResult = { success: false };
+let daoProposalResult: PublishResult = { success: false };
 
 if (!PRIVATE_KEY) {
   console.log(`
@@ -610,13 +535,12 @@ if (!PRIVATE_KEY) {
   │  export PRIVATE_KEY="0x..."                                 │
   │                                                             │
   │  Optionally for DAO proposal:                               │
-  │  export DAO_SPACE_ADDRESS="0x..."                           │
-  │  export DAO_SPACE_ID="0x..."                                │
+  │  export DAO_SPACE_ID="..."  # 32-char hex (no dashes)       │
   │                                                             │
   │  Get your private key from:                                 │
   │  https://www.geobrowser.io/export-wallet                    │
   │                                                             │
-  │  Schema and recipe created successfully (${schema.ops.length + margheritaPizza.ops.length} operations)   │
+  │  Schema and recipe created successfully (${allOperations.length} operations)   │
   │  Skipping live blockchain interactions...                   │
   │                                                             │
   └─────────────────────────────────────────────────────────────┘
@@ -630,12 +554,11 @@ if (!PRIVATE_KEY) {
   );
 
   // Optionally propose to DAO
-  if (personalResult.success && DAO_SPACE_ADDRESS && DAO_SPACE_ID) {
+  if (personalResult.success && DAO_SPACE_ID) {
     console.log("\n");
     daoProposalResult = await proposeRecipeToDAO(
       schema.ops,
       margheritaPizza.ops,
-      DAO_SPACE_ADDRESS,
       DAO_SPACE_ID,
       PRIVATE_KEY
     );
@@ -655,9 +578,9 @@ console.log(`
 ║                                                                   ║
 ║  Schema Created:                                                  ║
 ║  ───────────────                                                  ║
-║  • 14 Properties                                                  ║
-║  • 4 Types (Recipe, Ingredient, Chef, Relation)                   ║
-║  • 2 Relation Types (Uses, Created By)                            ║
+║  - 14 Properties                                                  ║
+║  - 4 Types (Recipe, Ingredient, Chef, Relation)                   ║
+║  - 2 Relation Types (Uses, Created By)                            ║
 ║                                                                   ║
 ║  Recipe Knowledge Graph:                                          ║
 ║  ───────────────────────                                          ║
@@ -677,30 +600,63 @@ console.log(`
 ║                                                                   ║
 ║  Total Operations: ${String(totalOps).padEnd(47)}║
 ${personalResult.success ? `║  Personal Space: ${(personalResult.spaceId || "").padEnd(43)}║` : "║  Personal Space: (not published)                                  ║"}
-${daoProposalResult.success ? `║  DAO Proposal: ${(daoProposalResult.proposalId || "").padEnd(45)}║` : "║  DAO Proposal: (not submitted)                                    ║"}
+${daoProposalResult.success ? `║  DAO Proposal: ${(daoProposalResult.editId || "").padEnd(45)}║` : "║  DAO Proposal: (not submitted)                                    ║"}
 ║                                                                   ║
 ║  Gas Used: $0 (Smart Account with sponsorship)                    ║
 ║                                                                   ║
 ╚═══════════════════════════════════════════════════════════════════╝
+`);
 
-                    CONGRATULATIONS!
+// =============================================================================
+// CURRICULUM COMPLETE!
+// =============================================================================
 
-  You've successfully completed the Geo SDK curriculum and built
-  a complete decentralized application that:
-
-  ✓ Designs schemas with properties, types, and relations
-  ✓ Creates interconnected entities forming a knowledge graph
-  ✓ Publishes to IPFS and personal spaces
-  ✓ Uses smart accounts with gas sponsorship
-  ✓ Proposes changes to DAO-governed spaces
-
-  You're now ready to build real applications on The Graph's
-  Knowledge Graph network!
+console.log(`
+╔═══════════════════════════════════════════════════════════════════╗
+║                    CURRICULUM COMPLETE!                           ║
+╠═══════════════════════════════════════════════════════════════════╣
+║                                                                   ║
+║  Congratulations! You've completed all 14 courses!                ║
+║                                                                   ║
+║  PHASE 1 - FOUNDATION (Courses 1-3):                              ║
+║  ────────────────────────────────────                             ║
+║  - Knowledge Graph Overview & Architecture                        ║
+║  - Reading Data with GraphQL                                      ║
+║  - Core Concepts: IDs, Properties, Types, Entities, Relations     ║
+║                                                                   ║
+║  PHASE 2 - CREATING DATA (Courses 4-7):                           ║
+║  ────────────────────────────────────                             ║
+║  - Schemas (Properties + Types)                                   ║
+║  - Entities & Values                                              ║
+║  - Relations & Graph Building                                     ║
+║  - Operations & Edits                                             ║
+║                                                                   ║
+║  PHASE 3 - PUBLISHING (Courses 8-10):                             ║
+║  ─────────────────────────────────────                            ║
+║  - Publishing to Personal Spaces                                  ║
+║  - Smart Accounts with Gas Sponsorship                            ║
+║  - DAO Governance & Proposals                                     ║
+║                                                                   ║
+║  PHASE 4 - ADVANCED PATTERNS (Courses 11-13):                     ║
+║  ─────────────────────────────────────────                        ║
+║  - Text/Data/Image Blocks                                         ║
+║  - Updates & Deletes                                              ║
+║  - Batch Import                                                   ║
+║                                                                   ║
+║  PHASE 5 - CAPSTONE (Course 14):                                  ║
+║  ────────────────────────────────                                 ║
+║  - Complete Recipe Book Application                               ║
+║                                                                   ║
+║  You're now ready to build production-grade applications on       ║
+║  the Geo Knowledge Graph!                                         ║
+║                                                                   ║
+╚═══════════════════════════════════════════════════════════════════╝
 
   Resources:
   ──────────
-  • Geo SDK: https://github.com/geobrowser/geo-sdk
-  • Geo Browser: https://geobrowser.io
-  • The Graph: https://thegraph.com
+  - Geo SDK: https://github.com/geobrowser/geo-sdk
+  - Official Demo: https://github.com/geobrowser/geo_tech_demo
+  - Geo Browser: https://geobrowser.io
+  - API Endpoint: https://testnet-api.geobrowser.io/graphql
 
 `);

@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * COURSE 7: Publishing to IPFS and Personal Spaces
+ * COURSE 8: Publishing to IPFS and Personal Spaces
  * ============================================================================
  *
  * OBJECTIVE: Learn to publish edits to IPFS and submit them to a personal
@@ -11,26 +11,23 @@
  * - Content IDs (CIDs)
  * - Personal Spaces as data domains
  * - personalSpace.publishEdit() function
- * - getWalletClient() for EOA wallets
- * - Wallet clients and authentication
+ * - Using shared utilities for cleaner code
  *
  * REQUIREMENTS:
  * - Set PRIVATE_KEY environment variable (export from https://www.geobrowser.io/export-wallet)
- * - Testnet ETH from faucet: https://faucet.conduit.xyz/geo-test-zc16z3tcvf
+ *
+ * NOTE: This course uses the shared utilities from src/functions.ts.
+ * See that file for the full implementation details of publishOps().
  *
  * ============================================================================
  */
 
-import { createPublicClient, type Hex, http } from "viem";
-import {
-  Graph,
-  personalSpace,
-  getWalletClient,
-  TESTNET_RPC_URL,
-} from "@geoprotocol/geo-sdk";
-import { SpaceRegistryAbi } from "@geoprotocol/geo-sdk/abis";
-import { TESTNET } from "@geoprotocol/geo-sdk/contracts";
+import "dotenv/config";
+import { Graph } from "@geoprotocol/geo-sdk";
 import type { Op } from "@geoprotocol/geo-sdk";
+
+// Import shared utilities - see src/functions.ts for implementation details
+import { publishOps, printOpsSummary } from "../src/functions.js";
 
 /**
  * EXPLANATION:
@@ -51,9 +48,11 @@ import type { Op } from "@geoprotocol/geo-sdk";
  * 2. Call personalSpace.publishEdit() → uploads to IPFS, returns calldata
  * 3. Send transaction with walletClient.sendTransaction()
  * 4. Indexer reads and makes data queryable
+ *
+ * The publishOps() helper in src/functions.ts handles all of this for you!
  */
 
-console.log("=== Course 7: Publishing to IPFS and Personal Spaces ===\n");
+console.log("=== Course 8: Publishing to IPFS and Personal Spaces ===\n");
 
 // =============================================================================
 // UNDERSTANDING THE ARCHITECTURE
@@ -122,177 +121,83 @@ console.log("  1. Create Title property");
 console.log("  2. Create Book type");
 console.log('  3. Create "Moby Dick" entity');
 
+// Print operation summary
+console.log("\n--- Operation Summary ---");
+printOpsSummary(allOps);
+
 // =============================================================================
 // CHALLENGE: Complete Publish Flow
 // =============================================================================
 /**
  * CHALLENGE:
- * Write a complete function that takes a list of operations, creates an Edit,
- * publishes to IPFS, and submits to a personal space. Handle errors appropriately.
+ * Use the publishOps() helper from src/functions.ts to publish your operations.
+ * The helper handles:
+ * - Creating wallet client (smart account by default)
+ * - Ensuring personal space exists
+ * - Publishing to IPFS
+ * - Submitting on-chain
  *
  * Try it yourself first, then scroll down for the solution!
  */
 
 // YOUR CODE HERE:
-// async function publishToPersonalSpace(
-//   operations: Op[],
-//   editName: string,
-//   privateKey: `0x${string}`
-// ) {
-//   // Get wallet client using getWalletClient from SDK
-//   // Check if space exists, create if not
-//   // Look up space ID from registry
-//   // Call personalSpace.publishEdit() to get CID and calldata
-//   // Send transaction with walletClient
+// async function publishMyBook(privateKey: `0x${string}`) {
+//   const result = await publishOps({
+//     ops: allOps,
+//     editName: "Add Moby Dick",
+//     privateKey,
+//   });
+//   return result;
 // }
 
 // =============================================================================
 // SOLUTION
 // =============================================================================
 
-console.log("\n--- Challenge Solution: Complete Publish Flow ---\n");
-
-interface PublishResult {
-  success: boolean;
-  editId?: string;
-  cid?: string;
-  transactionHash?: string;
-  spaceId?: string;
-  error?: string;
-}
+console.log("\n--- Challenge Solution: Using publishOps() Helper ---\n");
 
 /**
- * Publish operations to a personal space (EOA wallet version).
+ * Publish operations using the shared helper.
  *
- * This function follows the official SDK README pattern:
- * 1. Gets wallet client using getWalletClient from the SDK
- * 2. Checks if personal space exists, creates one if not
- * 3. Looks up space ID from the registry
- * 4. Publishes edit to IPFS and gets calldata
- * 5. Sends transaction to register the edit on-chain
+ * The publishOps() function in src/functions.ts handles:
+ * 1. Creating smart account wallet client (gas-sponsored by default)
+ * 2. Checking if personal space exists, creating if not
+ * 3. Looking up space ID from registry
+ * 4. Publishing to IPFS via personalSpace.publishEdit()
+ * 5. Submitting transaction on-chain
+ *
+ * This is much simpler than implementing the full flow manually!
  */
-async function publishToPersonalSpace(
-  operations: Op[],
-  editName: string,
-  privateKey: `0x${string}`
-): Promise<PublishResult> {
-  console.log(`Publishing Edit: "${editName}"`);
-  console.log(`Operations: ${operations.length}`);
+async function publishMyBook(privateKey: `0x${string}`) {
+  console.log("Using publishOps() helper from src/functions.ts\n");
 
-  try {
-    // Step 1: Get wallet client from SDK
-    console.log("\n[Step 1/5] Getting wallet client...");
-    const walletClient = await getWalletClient({
-      privateKey,
-    });
-    const account = walletClient.account;
-    if (!account) {
-      throw new Error("Failed to get account from wallet client");
-    }
-    console.log(`  ✓ Address: ${account.address.slice(0, 10)}...${account.address.slice(-6)}`);
+  const result = await publishOps({
+    ops: allOps,
+    editName: "Add Moby Dick to Library",
+    privateKey,
+    useSmartAccount: true, // Use smart account with gas sponsorship
+    network: "TESTNET",
+  });
 
-    // Create public client for reading contract state
-    const publicClient = createPublicClient({
-      transport: http(TESTNET_RPC_URL),
-    });
-
-    // Step 2: Check if personal space exists
-    console.log("\n[Step 2/5] Checking for existing personal space...");
-    const hasExistingSpace = await personalSpace.hasSpace({
-      address: account.address,
-    });
-
-    if (!hasExistingSpace) {
-      console.log("  No space found. Creating personal space...");
-      const { to, calldata } = personalSpace.createSpace();
-
-      const createSpaceTxHash = await walletClient.sendTransaction({
-        account,
-        to,
-        data: calldata,
-        chain: null, // viem requires this; null means "use client's chain"
-      });
-
-      await publicClient.waitForTransactionReceipt({ hash: createSpaceTxHash });
-      console.log(`  ✓ Personal space created: ${createSpaceTxHash.slice(0, 20)}...`);
-    } else {
-      console.log("  ✓ Personal space exists");
-    }
-
-    // Step 3: Look up space ID from registry
-    console.log("\n[Step 3/5] Looking up space ID...");
-    const spaceIdHex = (await publicClient.readContract({
-      address: TESTNET.SPACE_REGISTRY_ADDRESS,
-      abi: SpaceRegistryAbi,
-      functionName: "addressToSpaceId",
-      args: [account.address],
-    })) as Hex;
-
-    // Convert bytes16 hex to UUID string (without dashes)
-    const spaceId = spaceIdHex.slice(2, 34).toLowerCase();
-    console.log(`  ✓ Space ID: ${spaceId}`);
-
-    // Step 4: Publish to IPFS and get calldata
-    console.log("\n[Step 4/5] Publishing to IPFS...");
-    const { cid, editId, to, calldata } = await personalSpace.publishEdit({
-      name: editName,
-      spaceId,
-      ops: operations,
-      author: account.address,
-      network: "TESTNET",
-    });
-
-    console.log(`  ✓ Edit ID: ${editId}`);
-    console.log(`  ✓ CID: ${cid}`);
-
-    // Step 5: Submit on-chain
-    console.log("\n[Step 5/5] Submitting on-chain...");
-    const txHash = await walletClient.sendTransaction({
-      account,
-      to,
-      data: calldata,
-      chain: null, // viem requires this; null means "use client's chain"
-    });
-
-    console.log(`  ✓ Transaction: ${txHash}`);
-
-    // Wait for confirmation
-    const receipt = await publicClient.waitForTransactionReceipt({
-      hash: txHash,
-    });
-    console.log(`  ✓ Confirmed in block ${receipt.blockNumber}`);
-
+  if (result.success) {
     console.log(`
   ┌─────────────────────────────────────────────────────────────┐
   │                    PUBLISH COMPLETE                         │
   ├─────────────────────────────────────────────────────────────┤
   │                                                             │
-  │  Edit Name: ${editName.padEnd(43)}│
-  │  Space ID: ${spaceId.padEnd(44)}│
-  │  Edit ID: ${editId.padEnd(45)}│
-  │  CID: ${cid.padEnd(49)}│
+  │  Space ID: ${(result.spaceId || "").padEnd(44)}│
+  │  Edit ID: ${(result.editId || "").padEnd(45)}│
+  │  CID: ${(result.cid || "").padEnd(49)}│
+  │  Transaction: ${(result.transactionHash?.slice(0, 20) || "").padEnd(40)}│
   │  Status: SUCCESS                                            │
   │                                                             │
   └─────────────────────────────────────────────────────────────┘
     `);
-
-    return {
-      success: true,
-      editId,
-      cid,
-      transactionHash: txHash,
-      spaceId,
-    };
-  } catch (error) {
-    const errorMessage =
-      error instanceof Error ? error.message : "Unknown error";
-    console.error(`\n[ERROR] Publish failed: ${errorMessage}`);
-
-    return {
-      success: false,
-      error: errorMessage,
-    };
+  } else {
+    console.error(`Publish failed: ${result.error}`);
   }
+
+  return result;
 }
 
 // =============================================================================
@@ -323,80 +228,57 @@ if (!PRIVATE_KEY) {
   └─────────────────────────────────────────────────────────────┘
   `);
 } else {
-  // Run the full publish flow
-  await publishToPersonalSpace(
-    allOps,
-    "Add Moby Dick to Library",
-    PRIVATE_KEY
-  );
+  // Run the publish flow using the helper
+  await publishMyBook(PRIVATE_KEY);
 }
 
 // =============================================================================
 // CODE SUMMARY
 // =============================================================================
 
-console.log("--- Code Summary (from official README) ---\n");
+console.log("--- Code Summary (using shared helper) ---\n");
 console.log(`
-  import { createPublicClient, type Hex, http } from "viem";
-  import { privateKeyToAccount } from "viem/accounts";
-  import {
-    Graph,
-    personalSpace,
-    getWalletClient,
-    SpaceRegistryAbi,
-    TESTNET_RPC_URL,
-  } from "@geoprotocol/geo-sdk";
-  import { TESTNET } from "@geoprotocol/geo-sdk/contracts";
+  // Using the shared publishOps() helper (recommended):
 
-  // Get wallet client from SDK
-  const walletClient = await getWalletClient({ privateKey });
-  const account = walletClient.account;
+  import { Graph } from "@geoprotocol/geo-sdk";
+  import { publishOps } from "../src/functions.js";
 
-  // Create operations
-  const { ops, id: entityId } = Graph.createEntity({
-    name: "Test Entity",
+  // Create your operations
+  const { ops } = Graph.createEntity({
+    name: "My Entity",
     description: "Created via SDK",
   });
 
-  // Check/create personal space
-  const hasSpace = await personalSpace.hasSpace({ address: account.address });
-  if (!hasSpace) {
-    const { to, calldata } = personalSpace.createSpace();
-    await walletClient.sendTransaction({ account, to, data: calldata });
-  }
-
-  // Look up space ID
-  const publicClient = createPublicClient({ transport: http(TESTNET_RPC_URL) });
-  const spaceIdHex = await publicClient.readContract({
-    address: TESTNET.SPACE_REGISTRY_ADDRESS,
-    abi: SpaceRegistryAbi,
-    functionName: "addressToSpaceId",
-    args: [account.address],
-  });
-  const spaceId = spaceIdHex.slice(2, 34).toLowerCase();
-
-  // Publish to IPFS and get calldata
-  const { cid, editId, to, calldata } = await personalSpace.publishEdit({
-    name: "My Edit",
-    spaceId,
+  // Publish with one function call!
+  const result = await publishOps({
     ops,
-    author: account.address,
+    editName: "My Edit",
+    privateKey: PRIVATE_KEY,
+    useSmartAccount: true,  // Gas-sponsored (no ETH needed)
     network: "TESTNET",
   });
 
-  // Submit on-chain
-  const txHash = await walletClient.sendTransaction({
-    account: walletClient.account,
-    to,
-    data: calldata,
-  });
+  console.log("CID:", result.cid);
+  console.log("Edit ID:", result.editId);
+  console.log("Transaction:", result.transactionHash);
+
+  // ─────────────────────────────────────────────────────────────
+  // Under the hood, publishOps() does:
+  // 1. getSmartAccountWalletClient() or getWalletClient()
+  // 2. personalSpace.hasSpace() / personalSpace.createSpace()
+  // 3. Look up space ID from SpaceRegistry contract
+  // 4. personalSpace.publishEdit() → IPFS upload
+  // 5. walletClient.sendTransaction() → on-chain
+  //
+  // See src/functions.ts for the full implementation!
+  // ─────────────────────────────────────────────────────────────
 `);
 
 // =============================================================================
 // WHAT'S NEXT?
 // =============================================================================
 console.log("\n--- What's Next? ---");
-console.log("Personal spaces give you full control. But what about easier");
-console.log("onboarding? Course 8 introduces SMART ACCOUNTS with gas");
-console.log("sponsorship - users can transact without holding ETH!");
-console.log("\nRun: npm run course8");
+console.log("This course used a smart account with gas sponsorship.");
+console.log("Course 9 goes deeper into SMART ACCOUNTS - how they work,");
+console.log("account abstraction, and advanced wallet patterns.");
+console.log("\nRun: npm run course9");

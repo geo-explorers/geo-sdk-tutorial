@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * COURSE 8: Smart Accounts and Gas Sponsorship
+ * COURSE 9: Smart Accounts and Gas Sponsorship
  * ============================================================================
  *
  * OBJECTIVE: Learn to use Smart Accounts with Pimlico for gas-sponsored
@@ -18,19 +18,18 @@
  * - Set PRIVATE_KEY environment variable (export from https://www.geobrowser.io/export-wallet)
  * - No testnet ETH required! Gas is sponsored by Pimlico.
  *
+ * NOTE: This course uses the shared utilities from src/functions.ts.
+ * The publishOps() helper uses smart accounts by default!
+ *
  * ============================================================================
  */
 
-import { createPublicClient, type Hex, http } from "viem";
-import {
-  Graph,
-  personalSpace,
-  getSmartAccountWalletClient,
-  TESTNET_RPC_URL,
-} from "@geoprotocol/geo-sdk";
-import { SpaceRegistryAbi } from "@geoprotocol/geo-sdk/abis";
-import { TESTNET } from "@geoprotocol/geo-sdk/contracts";
+import "dotenv/config";
+import { Graph } from "@geoprotocol/geo-sdk";
 import type { Op } from "@geoprotocol/geo-sdk";
+
+// Import shared utilities - see src/functions.ts for implementation details
+import { publishOps, printOpsSummary } from "../src/functions.js";
 
 /**
  * EXPLANATION:
@@ -53,7 +52,7 @@ import type { Op } from "@geoprotocol/geo-sdk";
  * - Better onboarding experience
  */
 
-console.log("=== Course 8: Smart Accounts and Gas Sponsorship ===\n");
+console.log("=== Course 9: Smart Accounts and Gas Sponsorship ===\n");
 
 // =============================================================================
 // COMPARING ACCOUNT TYPES
@@ -101,16 +100,16 @@ console.log(`
  * and publishes their first edit with sponsored gas. The function should
  * handle the complete flow from account creation to successful publish.
  *
+ * HINT: Use publishOps() with useSmartAccount: true (this is the default!)
+ *
  * Try it yourself first, then scroll down for the solution!
  */
 
 // YOUR CODE HERE:
 // async function onboardNewUser(privateKey: `0x${string}`) {
-//   // Create smart account using getSmartAccountWalletClient
-//   // Check if personal space exists, create if not
-//   // Look up space ID from registry
-//   // Create welcome profile
-//   // Publish with sponsored gas
+//   // Create a welcome profile entity
+//   // Use publishOps() with smart account (default)
+//   // Return the result
 // }
 
 // =============================================================================
@@ -131,11 +130,10 @@ interface OnboardingResult {
 /**
  * Onboard a new user with a smart account and gas sponsorship.
  *
- * This function follows the official SDK README pattern for smart accounts:
- * 1. Creates a smart account using getSmartAccountWalletClient
- * 2. Checks if personal space exists, creates one if not
- * 3. Creates a welcome profile with schema and entity
- * 4. Publishes to IPFS and submits on-chain (gas-free!)
+ * Using the publishOps() helper makes this incredibly simple:
+ * - Smart accounts are used by default (useSmartAccount: true)
+ * - Personal space is created automatically if needed
+ * - Gas is sponsored by Pimlico - no ETH required!
  */
 async function onboardNewUser(privateKey: `0x${string}`): Promise<OnboardingResult> {
   console.log("╔═══════════════════════════════════════════════════════════╗");
@@ -143,61 +141,11 @@ async function onboardNewUser(privateKey: `0x${string}`): Promise<OnboardingResu
   console.log("╚═══════════════════════════════════════════════════════════╝\n");
 
   console.log("Welcome! Let's set up your decentralized knowledge space.\n");
+  console.log("Note: Gas is sponsored - this costs you nothing!\n");
 
   try {
-    // Step 1: Create Smart Account (gas-sponsored!)
-    console.log("[Step 1/5] Creating Smart Account...");
-    console.log("  - Setting up Safe smart account");
-    console.log("  - Configuring Pimlico gas sponsorship");
-
-    const smartAccount = await getSmartAccountWalletClient({ privateKey });
-    const smartAccountAddress = smartAccount.account.address;
-
-    console.log(`  ✓ Smart Account: ${smartAccountAddress.slice(0, 15)}...${smartAccountAddress.slice(-6)}`);
-    console.log("  ✓ Gas sponsorship: ENABLED");
-
-    // Create public client for reading contract state
-    const publicClient = createPublicClient({
-      transport: http(TESTNET_RPC_URL),
-    });
-
-    // Step 2: Check if personal space exists
-    console.log("\n[Step 2/5] Checking for existing personal space...");
-    const hasExistingSpace = await personalSpace.hasSpace({
-      address: smartAccountAddress,
-    });
-
-    if (!hasExistingSpace) {
-      console.log("  No space found. Creating personal space...");
-      const { to, calldata } = personalSpace.createSpace();
-
-      // Smart account sendTransaction doesn't need account/chain params
-      const createSpaceTxHash = await smartAccount.sendTransaction({
-        to,
-        data: calldata,
-      });
-
-      await publicClient.waitForTransactionReceipt({ hash: createSpaceTxHash });
-      console.log(`  ✓ Personal space created: ${createSpaceTxHash.slice(0, 20)}...`);
-    } else {
-      console.log("  ✓ Personal space exists");
-    }
-
-    // Step 3: Look up space ID from registry
-    console.log("\n[Step 3/5] Looking up space ID...");
-    const spaceIdHex = (await publicClient.readContract({
-      address: TESTNET.SPACE_REGISTRY_ADDRESS,
-      abi: SpaceRegistryAbi,
-      functionName: "addressToSpaceId",
-      args: [smartAccountAddress],
-    })) as Hex;
-
-    // Convert bytes16 hex to UUID string (without dashes)
-    const spaceId = spaceIdHex.slice(2, 34).toLowerCase();
-    console.log(`  ✓ Space ID: ${spaceId}`);
-
-    // Step 4: Create Welcome Profile schema and entity
-    console.log("\n[Step 4/5] Setting up profile schema...");
+    // Step 1: Create Welcome Profile schema and entity
+    console.log("[Step 1/2] Creating profile schema and entity...\n");
 
     const nameResult = Graph.createProperty({
       name: "Display Name",
@@ -240,36 +188,26 @@ async function onboardNewUser(privateKey: `0x${string}`): Promise<OnboardingResu
 
     console.log("  ✓ Created 3 profile properties");
     console.log("  ✓ Created User Profile type");
-    console.log("  ✓ Created profile entity");
+    console.log("  ✓ Created profile entity\n");
 
-    // Step 5: Publish to IPFS and submit on-chain (gas-free!)
-    console.log("\n[Step 5/5] Publishing to blockchain (gas-free!)...");
-    console.log("  Note: Gas is sponsored - this costs you nothing!");
+    printOpsSummary(allOps);
 
-    const { cid, editId, to, calldata } = await personalSpace.publishEdit({
-      name: "Welcome Profile Setup",
-      spaceId,
+    // Step 2: Publish using smart account (gas-free!)
+    console.log("\n[Step 2/2] Publishing to blockchain (gas-free!)...\n");
+    console.log("  Using publishOps() with smart account (default)");
+    console.log("  Gas is sponsored by Pimlico paymaster\n");
+
+    const result = await publishOps({
       ops: allOps,
-      author: smartAccountAddress,
+      editName: "Welcome Profile Setup",
+      privateKey,
+      useSmartAccount: true, // This is the default!
       network: "TESTNET",
     });
 
-    console.log(`  ✓ Edit ID: ${editId}`);
-    console.log(`  ✓ CID: ${cid}`);
-
-    // Smart account sendTransaction - gas is sponsored!
-    const txHash = await smartAccount.sendTransaction({
-      to,
-      data: calldata,
-    });
-
-    console.log(`  ✓ Transaction: ${txHash}`);
-
-    // Wait for confirmation
-    const receipt = await publicClient.waitForTransactionReceipt({
-      hash: txHash,
-    });
-    console.log(`  ✓ Confirmed in block ${receipt.blockNumber}`);
+    if (!result.success) {
+      throw new Error(result.error || "Publish failed");
+    }
 
     // Onboarding complete!
     console.log(`
@@ -279,13 +217,12 @@ async function onboardNewUser(privateKey: `0x${string}`): Promise<OnboardingResu
 ║                                                                   ║
 ║  Your Account:                                                    ║
 ║  ─────────────                                                    ║
-║  Smart Account: ${smartAccountAddress.slice(0, 42).padEnd(44)}║
-║  Personal Space: ${spaceId.padEnd(43)}║
+║  Personal Space: ${(result.spaceId || "").padEnd(43)}║
 ║                                                                   ║
 ║  Your First Edit:                                                 ║
 ║  ────────────────                                                 ║
-║  Edit ID: ${editId.padEnd(51)}║
-║  CID: ${cid.padEnd(55)}║
+║  Edit ID: ${(result.editId || "").padEnd(51)}║
+║  CID: ${(result.cid || "").padEnd(55)}║
 ║                                                                   ║
 ║  What's Next:                                                     ║
 ║  ────────────                                                     ║
@@ -301,10 +238,9 @@ async function onboardNewUser(privateKey: `0x${string}`): Promise<OnboardingResu
 
     return {
       success: true,
-      smartAccountAddress,
-      personalSpaceId: spaceId,
-      firstEditId: editId,
-      firstEditCid: cid,
+      personalSpaceId: result.spaceId,
+      firstEditId: result.editId,
+      firstEditCid: result.cid,
     };
   } catch (error) {
     const errorMessage =
@@ -377,50 +313,39 @@ console.log(`
 // CODE SUMMARY
 // =============================================================================
 
-console.log("--- Code Summary (from official README) ---\n");
+console.log("--- Code Summary (using shared helper) ---\n");
 console.log(`
-  import { createPublicClient, type Hex, http } from "viem";
-  import {
-    Graph,
-    personalSpace,
-    getSmartAccountWalletClient,
-    SpaceRegistryAbi,
-    TESTNET_RPC_URL,
-  } from "@geoprotocol/geo-sdk";
-  import { TESTNET } from "@geoprotocol/geo-sdk/contracts";
+  import { Graph } from "@geoprotocol/geo-sdk";
+  import { publishOps } from "../src/functions.js";
 
-  // Get smart account wallet client (Safe + Pimlico paymaster)
-  const smartAccount = await getSmartAccountWalletClient({ privateKey });
-  const smartAccountAddress = smartAccount.account.address;
-
-  // Check if personal space exists
-  const hasSpace = await personalSpace.hasSpace({ address: smartAccountAddress });
-  if (!hasSpace) {
-    const { to, calldata } = personalSpace.createSpace();
-    await smartAccount.sendTransaction({ to, data: calldata });
-  }
-
-  // Look up space ID
-  const publicClient = createPublicClient({ transport: http(TESTNET_RPC_URL) });
-  const spaceIdHex = await publicClient.readContract({
-    address: TESTNET.SPACE_REGISTRY_ADDRESS,
-    abi: SpaceRegistryAbi,
-    functionName: "addressToSpaceId",
-    args: [smartAccountAddress],
+  // Create your operations
+  const { ops } = Graph.createEntity({
+    name: "My Entity",
+    description: "Created with gas sponsorship!",
   });
-  const spaceId = spaceIdHex.slice(2, 34).toLowerCase();
 
-  // Publish to IPFS and get calldata
-  const { cid, editId, to, calldata } = await personalSpace.publishEdit({
-    name: "My Edit",
-    spaceId,
+  // Publish with smart account (gas-free!)
+  // useSmartAccount: true is the DEFAULT
+  const result = await publishOps({
     ops,
-    author: smartAccountAddress,
+    editName: "My Edit",
+    privateKey: PRIVATE_KEY,
+    // useSmartAccount: true,  // This is the default!
     network: "TESTNET",
   });
 
-  // Submit on-chain (gas-free!)
-  const txHash = await smartAccount.sendTransaction({ to, data: calldata });
+  // That's it! No ETH needed.
+  console.log("Edit published:", result.editId);
+
+  // ─────────────────────────────────────────────────────────────
+  // The publishOps() helper automatically:
+  // 1. Creates a Safe smart account via getSmartAccountWalletClient()
+  // 2. Uses Pimlico paymaster for gas sponsorship
+  // 3. Creates personal space if needed
+  // 4. Publishes to IPFS and submits on-chain
+  //
+  // See src/functions.ts for implementation details!
+  // ─────────────────────────────────────────────────────────────
 `);
 
 // =============================================================================
@@ -428,6 +353,6 @@ console.log(`
 // =============================================================================
 console.log("\n--- What's Next? ---");
 console.log("Personal spaces are great for individual data. But what about");
-console.log("collaborative knowledge? Course 9 introduces DAO SPACES with");
+console.log("collaborative knowledge? Course 10 introduces DAO SPACES with");
 console.log("community governance and voting.");
-console.log("\nRun: npm run course9");
+console.log("\nRun: npm run course10");

@@ -1,0 +1,22 @@
+[
+  {
+    "name": "Artificial Intelligence",
+    "description": "The simulation of human intelligence by machines"
+  },
+  {
+    "name": "Machine Learning",
+    "description": "A subset of AI that enables systems to learn from data"
+  },
+  {
+    "name": "Blockchain",
+    "description": "Distributed ledger technology for secure transactions"
+  },
+  {
+    "name": "Web3",
+    "description": "The decentralized internet built on blockchain"
+  },
+  {
+    "name": "Knowledge Graphs",
+    "description": "Structured representation of real-world entities and relationships"
+  }
+]

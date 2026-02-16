@@ -1,0 +1,29 @@
+[
+  {
+    "name": "ChainCore",
+    "description": "A decentralized platform for smart contracts",
+    "topics": ["Blockchain", "Web3"],
+    "founders": ["Alex Blockchain"]
+  },
+  {
+    "name": "DataIndex",
+    "description": "An indexing service for querying blockchain data",
+    "topics": ["Blockchain", "Web3", "Knowledge Graphs"]
+  },
+  {
+    "name": "SmartML",
+    "description": "An AI research and development lab",
+    "topics": ["Artificial Intelligence", "Machine Learning"]
+  },
+  {
+    "name": "DataPods",
+    "description": "Decentralized personal data storage platform",
+    "topics": ["Web3", "Knowledge Graphs"],
+    "founders": ["Casey Semantic"]
+  },
+  {
+    "name": "KnowledgeNet",
+    "description": "A decentralized knowledge graph protocol",
+    "topics": ["Knowledge Graphs", "Web3", "Blockchain"]
+  }
+]
