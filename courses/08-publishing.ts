@@ -27,7 +27,14 @@ import { Graph } from "@geoprotocol/geo-sdk";
 import type { Op } from "@geoprotocol/geo-sdk";
 
 // Import shared utilities - see src/functions.ts for implementation details
-import { publishOps, printOpsSummary } from "../src/functions.js";
+import {
+  publishOps,
+  printOpsSummary,
+  prompt,
+  promptProperty,
+  promptType,
+  queryEntityByName,
+} from "../src/functions.js";
 
 /**
  * EXPLANATION:
@@ -91,21 +98,19 @@ console.log(`
 console.log("--- Creating Operations ---\n");
 
 // Create a simple book schema and entity
-const titlePropResult = Graph.createProperty({
-  name: "Title",
-  dataType: "TEXT",
-});
+const titlePropResult = await promptProperty("Title");
+const bookTypeResult = await promptType("Book", [titlePropResult.id]);
 
-const bookTypeResult = Graph.createType({
-  name: "Book",
-  properties: [titlePropResult.id],
-});
-
+let bookEntityName = await prompt("Enter entity name (e.g. Moby Dick): ");
+while (await queryEntityByName(bookEntityName)) {
+  console.warn(`  ⚠ "${bookEntityName}" already exists. Please enter a different name.`);
+  bookEntityName = await prompt("Enter a different name: ");
+}
 const bookEntityResult = Graph.createEntity({
-  name: "Moby Dick",
+  name: bookEntityName,
   types: [bookTypeResult.id],
   values: [
-    { property: titlePropResult.id, type: "text", value: "Moby Dick" },
+    { property: titlePropResult.id, type: "text", value: bookEntityName },
   ],
 });
 

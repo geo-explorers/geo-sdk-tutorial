@@ -29,7 +29,12 @@ import { Graph } from "@geoprotocol/geo-sdk";
 import type { Op } from "@geoprotocol/geo-sdk";
 
 // Import shared utilities and constants
-import { publishOps, printOpsSummary } from "../src/functions.js";
+import {
+  publishOps,
+  printOpsSummary,
+  prompt,
+  queryEntityByName,
+} from "../src/functions.js";
 import { TYPES, PROPERTIES } from "../src/constants.js";
 
 /**
@@ -234,15 +239,25 @@ async function proposeToDAOSpace(
 // This is the recommended pattern - reuse existing types!
 
 // Create a topic entity
+let topicName = await prompt("Enter topic name (e.g. Decentralized Governance): ");
+while (await queryEntityByName(topicName)) {
+  console.warn(`  ⚠ "${topicName}" already exists. Please enter a different name.`);
+  topicName = await prompt("Enter a different name: ");
+}
 const topicResult = Graph.createEntity({
-  name: "Decentralized Governance",
+  name: topicName,
   types: [TYPES.topic],
   description: "Systems for community-driven decision making",
 });
 
 // Create a project entity with proper root space types
+let projectName = await prompt("Enter project name (e.g. Community Wiki): ");
+while (await queryEntityByName(projectName)) {
+  console.warn(`  ⚠ "${projectName}" already exists. Please enter a different name.`);
+  projectName = await prompt("Enter a different name: ");
+}
 const projectResult = Graph.createEntity({
-  name: "Community Wiki",
+  name: projectName,
   types: [TYPES.project],
   description: "A collaboratively curated knowledge base",
   values: [
