@@ -28,7 +28,15 @@ import { Graph } from "@geoprotocol/geo-sdk";
 import type { Op, Id } from "@geoprotocol/geo-sdk";
 
 // Import shared utilities - see src/functions.ts for implementation details
-import { publishOps, printOpsSummary, type PublishResult } from "../src/functions.js";
+import {
+  publishOps,
+  printOpsSummary,
+  type PublishResult,
+  prompt,
+  promptProperty,
+  promptType,
+  queryEntityByName,
+} from "../src/functions.js";
 
 console.log("╔═══════════════════════════════════════════════════════════════╗");
 console.log("║   COURSE 14: CAPSTONE PROJECT - Collaborative Recipe Book    ║");
@@ -72,7 +80,7 @@ interface SchemaResult {
   ops: Op[];
 }
 
-function createRecipeBookSchema(): SchemaResult {
+async function createRecipeBookSchema(): Promise<SchemaResult> {
   console.log("Creating properties for Recipe Book...\n");
 
   /**
@@ -92,26 +100,26 @@ function createRecipeBookSchema(): SchemaResult {
   const allOps: Op[] = [];
 
   // ========== RECIPE PROPERTIES ==========
-  const recipeNameResult = Graph.createProperty({ name: "Recipe Name", dataType: "TEXT" });
-  const descriptionResult = Graph.createProperty({ name: "Description", dataType: "TEXT" });
-  const prepTimeResult = Graph.createProperty({ name: "Prep Time (min)", dataType: "INT64" });
-  const cookTimeResult = Graph.createProperty({ name: "Cook Time (min)", dataType: "INT64" });
-  const servingsResult = Graph.createProperty({ name: "Servings", dataType: "INT64" });
-  const difficultyResult = Graph.createProperty({ name: "Difficulty", dataType: "TEXT" });
-  const instructionsResult = Graph.createProperty({ name: "Instructions", dataType: "TEXT" });
+  const recipeNameResult = await promptProperty("Recipe Name");
+  const descriptionResult = await promptProperty("Description");
+  const prepTimeResult = await promptProperty("Prep Time (min)");
+  const cookTimeResult = await promptProperty("Cook Time (min)");
+  const servingsResult = await promptProperty("Servings");
+  const difficultyResult = await promptProperty("Difficulty");
+  const instructionsResult = await promptProperty("Instructions");
 
   // Ingredient properties
-  const ingredientNameResult = Graph.createProperty({ name: "Ingredient Name", dataType: "TEXT" });
-  const quantityResult = Graph.createProperty({ name: "Quantity", dataType: "FLOAT64" });
-  const unitResult = Graph.createProperty({ name: "Unit", dataType: "TEXT" });
+  const ingredientNameResult = await promptProperty("Ingredient Name");
+  const quantityResult = await promptProperty("Quantity");
+  const unitResult = await promptProperty("Unit");
 
   // Chef properties
-  const chefNameResult = Graph.createProperty({ name: "Chef Name", dataType: "TEXT" });
-  const bioResult = Graph.createProperty({ name: "Bio", dataType: "TEXT" });
-  const specialtyResult = Graph.createProperty({ name: "Specialty", dataType: "TEXT" });
+  const chefNameResult = await promptProperty("Chef Name");
+  const bioResult = await promptProperty("Bio");
+  const specialtyResult = await promptProperty("Specialty");
 
   // Relation properties
-  const relationNameResult = Graph.createProperty({ name: "Relation Name", dataType: "TEXT" });
+  const relationNameResult = await promptProperty("Relation Name");
 
   // Collect property ops
   allOps.push(
@@ -136,33 +144,26 @@ function createRecipeBookSchema(): SchemaResult {
   // ========== TYPES ==========
   console.log("\nCreating types...\n");
 
-  const recipeTypeResult = Graph.createType({
-    name: "Recipe",
-    properties: [
-      recipeNameResult.id,
-      descriptionResult.id,
-      prepTimeResult.id,
-      cookTimeResult.id,
-      servingsResult.id,
-      difficultyResult.id,
-      instructionsResult.id,
-    ],
-  });
-
-  const ingredientTypeResult = Graph.createType({
-    name: "Ingredient",
-    properties: [ingredientNameResult.id, quantityResult.id, unitResult.id],
-  });
-
-  const chefTypeResult = Graph.createType({
-    name: "Chef",
-    properties: [chefNameResult.id, bioResult.id, specialtyResult.id],
-  });
-
-  const relationTypeResult = Graph.createType({
-    name: "Relation Type",
-    properties: [relationNameResult.id],
-  });
+  const recipeTypeResult = await promptType("Recipe", [
+    recipeNameResult.id,
+    descriptionResult.id,
+    prepTimeResult.id,
+    cookTimeResult.id,
+    servingsResult.id,
+    difficultyResult.id,
+    instructionsResult.id,
+  ]);
+  const ingredientTypeResult = await promptType("Ingredient", [
+    ingredientNameResult.id,
+    quantityResult.id,
+    unitResult.id,
+  ]);
+  const chefTypeResult = await promptType("Chef", [
+    chefNameResult.id,
+    bioResult.id,
+    specialtyResult.id,
+  ]);
+  const relationTypeResult = await promptType("Relation Type", [relationNameResult.id]);
 
   // Collect type ops
   allOps.push(
@@ -172,35 +173,45 @@ function createRecipeBookSchema(): SchemaResult {
     ...relationTypeResult.ops
   );
 
-  console.log("  Recipe Type (7 properties)");
-  console.log("  Ingredient Type (3 properties)");
-  console.log("  Chef Type (3 properties)");
-  console.log("  Relation Type (1 property)");
+  console.log(`  Recipe Type (7 properties)`);
+  console.log(`  Ingredient Type (3 properties)`);
+  console.log(`  Chef Type (3 properties)`);
+  console.log(`  Relation Type (1 property)`);
 
   // ========== RELATION TYPES ==========
   console.log("\nCreating relation types...\n");
 
+  let usesRelationName = await prompt("Enter relation type name (e.g. Uses Ingredient): ");
+  while (await queryEntityByName(usesRelationName)) {
+    console.warn(`  ⚠ "${usesRelationName}" already exists. Please enter a different name.`);
+    usesRelationName = await prompt("Enter a different name: ");
+  }
   const usesRelationResult = Graph.createEntity({
-    name: "Uses Ingredient",
+    name: usesRelationName,
     types: [relationTypeResult.id],
     values: [
-      { property: relationNameResult.id, type: "text", value: "Uses Ingredient" },
+      { property: relationNameResult.id, type: "text", value: usesRelationName },
     ],
   });
 
+  let createdByRelationName = await prompt("Enter relation type name (e.g. Created By): ");
+  while (await queryEntityByName(createdByRelationName)) {
+    console.warn(`  ⚠ "${createdByRelationName}" already exists. Please enter a different name.`);
+    createdByRelationName = await prompt("Enter a different name: ");
+  }
   const createdByRelationResult = Graph.createEntity({
-    name: "Created By",
+    name: createdByRelationName,
     types: [relationTypeResult.id],
     values: [
-      { property: relationNameResult.id, type: "text", value: "Created By" },
+      { property: relationNameResult.id, type: "text", value: createdByRelationName },
     ],
   });
 
   // Collect relation type ops
   allOps.push(...usesRelationResult.ops, ...createdByRelationResult.ops);
 
-  console.log("  'Uses Ingredient' relation type");
-  console.log("  'Created By' relation type");
+  console.log(`  '${usesRelationName}' relation type`);
+  console.log(`  '${createdByRelationName}' relation type`);
 
   console.log(`
   ┌─────────────────────────────────────────────────────────────────┐
@@ -263,7 +274,7 @@ function createRecipeBookSchema(): SchemaResult {
   };
 }
 
-const schema = createRecipeBookSchema();
+const schema = await createRecipeBookSchema();
 
 // =============================================================================
 // PART 2: CREATE A COMPLETE RECIPE WITH RELATIONS
@@ -280,7 +291,7 @@ interface RecipeResult {
   ops: Op[];
 }
 
-function createRecipe(
+async function createRecipe(
   schemaData: SchemaResult,
   recipe: {
     name: string;
@@ -293,31 +304,41 @@ function createRecipe(
   },
   ingredients: Array<{ name: string; quantity: number; unit: string }>,
   chef: { name: string; bio: string; specialty: string }
-): RecipeResult {
+): Promise<RecipeResult> {
   const { properties, types, relationTypes } = schemaData;
   const allOps: Op[] = [];
 
   console.log(`Creating recipe: "${recipe.name}"\n`);
 
   // ========== CREATE CHEF ==========
+  let chefName = chef.name;
+  while (await queryEntityByName(chefName)) {
+    console.warn(`  ⚠ "${chefName}" already exists. Please enter a different name.`);
+    chefName = await prompt("Enter a different chef name: ");
+  }
   const chefResult = Graph.createEntity({
-    name: chef.name,
+    name: chefName,
     types: [types.chef],
     values: [
-      { property: properties.chefName, type: "text", value: chef.name },
+      { property: properties.chefName, type: "text", value: chefName },
       { property: properties.bio, type: "text", value: chef.bio },
       { property: properties.specialty, type: "text", value: chef.specialty },
     ],
   });
   allOps.push(...chefResult.ops);
-  console.log(`  Chef: ${chef.name}`);
+  console.log(`  Chef: ${chefName}`);
 
   // ========== CREATE RECIPE ==========
+  let recipeName = recipe.name;
+  while (await queryEntityByName(recipeName)) {
+    console.warn(`  ⚠ "${recipeName}" already exists. Please enter a different name.`);
+    recipeName = await prompt("Enter a different recipe name: ");
+  }
   const recipeResult = Graph.createEntity({
-    name: recipe.name,
+    name: recipeName,
     types: [types.recipe],
     values: [
-      { property: properties.recipeName, type: "text", value: recipe.name },
+      { property: properties.recipeName, type: "text", value: recipeName },
       { property: properties.description, type: "text", value: recipe.description },
       { property: properties.prepTime, type: "int64", value: recipe.prepTime },
       { property: properties.cookTime, type: "int64", value: recipe.cookTime },
@@ -327,7 +348,7 @@ function createRecipe(
     ],
   });
   allOps.push(...recipeResult.ops);
-  console.log(`  Recipe: ${recipe.name}`);
+  console.log(`  Recipe: ${recipeName}`);
 
   // ========== CONNECT RECIPE TO CHEF ==========
   const recipeToChefRelation = Graph.createRelation({
@@ -343,11 +364,16 @@ function createRecipe(
 
   const ingredientIds: Id[] = [];
   for (const ing of ingredients) {
+    let ingName = ing.name;
+    while (await queryEntityByName(ingName)) {
+      console.warn(`  ⚠ "${ingName}" already exists. Please enter a different name.`);
+      ingName = await prompt(`Enter a different name for ingredient "${ing.name}": `);
+    }
     const ingResult = Graph.createEntity({
-      name: ing.name,
+      name: ingName,
       types: [types.ingredient],
       values: [
-        { property: properties.ingredientName, type: "text", value: ing.name },
+        { property: properties.ingredientName, type: "text", value: ingName },
         { property: properties.quantity, type: "float64", value: ing.quantity },
         { property: properties.unit, type: "text", value: ing.unit },
       ],
@@ -362,7 +388,7 @@ function createRecipe(
     });
     allOps.push(...recipeToIngRelation.ops);
 
-    console.log(`    ${ing.quantity} ${ing.unit} ${ing.name}`);
+    console.log(`    ${ing.quantity} ${ing.unit} ${ingName}`);
   }
 
   return {
@@ -374,7 +400,7 @@ function createRecipe(
 }
 
 // Create a delicious recipe!
-const margheritaPizza = createRecipe(
+const margheritaPizza = await createRecipe(
   schema,
   {
     name: "Classic Margherita Pizza",

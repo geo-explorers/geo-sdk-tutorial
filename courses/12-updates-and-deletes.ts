@@ -26,7 +26,14 @@ import { Graph } from "@geoprotocol/geo-sdk";
 import type { Op, Id as IdType } from "@geoprotocol/geo-sdk";
 
 // Import shared utilities
-import { publishOps, printOpsSummary } from "../src/functions.js";
+import {
+  publishOps,
+  printOpsSummary,
+  prompt,
+  promptProperty,
+  promptType,
+  queryEntityByName,
+} from "../src/functions.js";
 
 console.log("=== Course 12: Updates & Deletes ===\n");
 
@@ -58,25 +65,26 @@ console.log("══════════════════════�
 console.log("  Demo 1: Updating Property Values");
 console.log("═══════════════════════════════════════════════════════════════\n");
 
-function createAndUpdateDemo(): { createOps: Op[]; updateOps: Op[]; entityId: string } {
+async function createAndUpdateDemo(): Promise<{ createOps: Op[]; updateOps: Op[]; entityId: string }> {
   console.log("Step 1: Create an entity with initial values\n");
 
   // Create property definitions
-  const nameProp = Graph.createProperty({ name: "Name", dataType: "TEXT" });
-  const statusProp = Graph.createProperty({ name: "Status", dataType: "TEXT" });
-  const versionProp = Graph.createProperty({ name: "Version", dataType: "INT64" });
-
-  const projectType = Graph.createType({
-    name: "Project",
-    properties: [nameProp.id, statusProp.id, versionProp.id],
-  });
+  const nameProp = await promptProperty("Name");
+  const statusProp = await promptProperty("Status");
+  const versionProp = await promptProperty("Version");
+  const projectType = await promptType("Project", [nameProp.id, statusProp.id, versionProp.id]);
 
   // Create entity with initial values
+  let projectEntityName = await prompt("Enter entity name (e.g. My Project): ");
+  while (await queryEntityByName(projectEntityName)) {
+    console.warn(`  ⚠ "${projectEntityName}" already exists. Please enter a different name.`);
+    projectEntityName = await prompt("Enter a different name: ");
+  }
   const projectEntity = Graph.createEntity({
-    name: "My Project",
+    name: projectEntityName,
     types: [projectType.id],
     values: [
-      { property: nameProp.id, type: "text", value: "My Project" },
+      { property: nameProp.id, type: "text", value: projectEntityName },
       { property: statusProp.id, type: "text", value: "Draft" },
       { property: versionProp.id, type: "int64", value: 1 },
     ],
@@ -90,8 +98,8 @@ function createAndUpdateDemo(): { createOps: Op[]; updateOps: Op[]; entityId: st
     ...projectEntity.ops,
   ];
 
-  console.log(`  Created Project entity with values:`);
-  console.log(`    - Name: "My Project"`);
+  console.log(`  Created project entity with values:`);
+  console.log(`    - Name: "${projectEntityName}"`);
   console.log(`    - Status: "Draft"`);
   console.log(`    - Version: 1`);
 
@@ -130,7 +138,7 @@ function createAndUpdateDemo(): { createOps: Op[]; updateOps: Op[]; entityId: st
   };
 }
 
-const updateDemo = createAndUpdateDemo();
+const updateDemo = await createAndUpdateDemo();
 
 // =============================================================================
 // DEMO 2: Unsetting Property Values
@@ -140,26 +148,27 @@ console.log("══════════════════════�
 console.log("  Demo 2: Unsetting Property Values");
 console.log("═══════════════════════════════════════════════════════════════\n");
 
-function createAndUnsetDemo(): { createOps: Op[]; unsetOps: Op[]; entityId: string } {
+async function createAndUnsetDemo(): Promise<{ createOps: Op[]; unsetOps: Op[]; entityId: string }> {
   console.log("Step 1: Create an entity with multiple property values\n");
 
   // Create property definitions
-  const nameProp = Graph.createProperty({ name: "Name", dataType: "TEXT" });
-  const emailProp = Graph.createProperty({ name: "Email", dataType: "TEXT" });
-  const phoneProp = Graph.createProperty({ name: "Phone", dataType: "TEXT" });
-  const notesProp = Graph.createProperty({ name: "Notes", dataType: "TEXT" });
-
-  const contactType = Graph.createType({
-    name: "Contact",
-    properties: [nameProp.id, emailProp.id, phoneProp.id, notesProp.id],
-  });
+  const nameProp = await promptProperty("Name");
+  const emailProp = await promptProperty("Email");
+  const phoneProp = await promptProperty("Phone");
+  const notesProp = await promptProperty("Notes");
+  const contactType = await promptType("Contact", [nameProp.id, emailProp.id, phoneProp.id, notesProp.id]);
 
   // Create entity with all properties filled
+  let contactEntityName = await prompt("Enter contact entity name (e.g. John Doe): ");
+  while (await queryEntityByName(contactEntityName)) {
+    console.warn(`  ⚠ "${contactEntityName}" already exists. Please enter a different name.`);
+    contactEntityName = await prompt("Enter a different name: ");
+  }
   const contactEntity = Graph.createEntity({
-    name: "John Doe",
+    name: contactEntityName,
     types: [contactType.id],
     values: [
-      { property: nameProp.id, type: "text", value: "John Doe" },
+      { property: nameProp.id, type: "text", value: contactEntityName },
       { property: emailProp.id, type: "text", value: "john@example.com" },
       { property: phoneProp.id, type: "text", value: "+1-555-123-4567" },
       { property: notesProp.id, type: "text", value: "Met at conference 2024" },
@@ -175,8 +184,8 @@ function createAndUnsetDemo(): { createOps: Op[]; unsetOps: Op[]; entityId: stri
     ...contactEntity.ops,
   ];
 
-  console.log(`  Created Contact entity with 4 property values`);
-  console.log(`    - Name: "John Doe"`);
+  console.log(`  Created contact entity with 4 property values`);
+  console.log(`    - Name: "${contactEntityName}"`);
   console.log(`    - Email: "john@example.com"`);
   console.log(`    - Phone: "+1-555-123-4567"`);
   console.log(`    - Notes: "Met at conference 2024"`);
@@ -218,7 +227,7 @@ function createAndUnsetDemo(): { createOps: Op[]; unsetOps: Op[]; entityId: stri
   };
 }
 
-const unsetDemo = createAndUnsetDemo();
+const unsetDemo = await createAndUnsetDemo();
 
 // =============================================================================
 // DEMO 3: Deleting Relations
@@ -228,44 +237,65 @@ console.log("══════════════════════�
 console.log("  Demo 3: Deleting Relations");
 console.log("═══════════════════════════════════════════════════════════════\n");
 
-function createAndDeleteRelationDemo(): { createOps: Op[]; deleteOps: Op[] } {
+async function createAndDeleteRelationDemo(): Promise<{ createOps: Op[]; deleteOps: Op[] }> {
   console.log("Step 1: Create entities with relations\n");
 
-  // Create types
-  const relationNameProp = Graph.createProperty({ name: "Relation Name", dataType: "TEXT" });
-  const relationType = Graph.createType({
-    name: "Relation Type",
-    properties: [relationNameProp.id],
-  });
-
-  const projectType = Graph.createType({ name: "Project", properties: [] });
-  const personType = Graph.createType({ name: "Team Member", properties: [] });
+  // Create property and types
+  const relationNameProp = await promptProperty("Relation Name");
+  const relationType = await promptType("Relation Type", [relationNameProp.id]);
+  const projectType = await promptType("Project", []);
+  const personType = await promptType("Team Member", []);
 
   // Create "Member Of" relation type
+  let memberOfName = await prompt("Enter relation type entity name (e.g. Member Of): ");
+  while (await queryEntityByName(memberOfName)) {
+    console.warn(`  ⚠ "${memberOfName}" already exists. Please enter a different name.`);
+    memberOfName = await prompt("Enter a different name: ");
+  }
   const memberOfRelationType = Graph.createEntity({
-    name: "Member Of",
+    name: memberOfName,
     types: [relationType.id],
-    values: [{ property: relationNameProp.id, type: "text", value: "Member Of" }],
+    values: [{ property: relationNameProp.id, type: "text", value: memberOfName }],
   });
 
   // Create entities
+  let projectName = await prompt("Enter project name (e.g. Knowledge Graph Project): ");
+  while (await queryEntityByName(projectName)) {
+    console.warn(`  ⚠ "${projectName}" already exists. Please enter a different name.`);
+    projectName = await prompt("Enter a different name: ");
+  }
   const project = Graph.createEntity({
-    name: "Knowledge Graph Project",
+    name: projectName,
     types: [projectType.id],
   });
 
+  let aliceName = await prompt("Enter team member 1 name (e.g. Alice): ");
+  while (await queryEntityByName(aliceName)) {
+    console.warn(`  ⚠ "${aliceName}" already exists. Please enter a different name.`);
+    aliceName = await prompt("Enter a different name: ");
+  }
   const alice = Graph.createEntity({
-    name: "Alice",
+    name: aliceName,
     types: [personType.id],
   });
 
+  let bobName = await prompt("Enter team member 2 name (e.g. Bob): ");
+  while (await queryEntityByName(bobName)) {
+    console.warn(`  ⚠ "${bobName}" already exists. Please enter a different name.`);
+    bobName = await prompt("Enter a different name: ");
+  }
   const bob = Graph.createEntity({
-    name: "Bob",
+    name: bobName,
     types: [personType.id],
   });
 
+  let charlieName = await prompt("Enter team member 3 name (e.g. Charlie): ");
+  while (await queryEntityByName(charlieName)) {
+    console.warn(`  ⚠ "${charlieName}" already exists. Please enter a different name.`);
+    charlieName = await prompt("Enter a different name: ");
+  }
   const charlie = Graph.createEntity({
-    name: "Charlie",
+    name: charlieName,
     types: [personType.id],
   });
 
@@ -303,19 +333,19 @@ function createAndDeleteRelationDemo(): { createOps: Op[]; deleteOps: Op[] } {
     ...charlieRelation.ops,
   ];
 
-  console.log(`  Created project: "Knowledge Graph Project"`);
-  console.log(`  Created 3 team members: Alice, Bob, Charlie`);
-  console.log(`  Created 3 "Member Of" relations`);
+  console.log(`  Created project: "${projectName}"`);
+  console.log(`  Created 3 team members: ${aliceName}, ${bobName}, ${charlieName}`);
+  console.log(`  Created 3 "${memberOfName}" relations`);
 
-  console.log("\nStep 2: Delete Bob's relation (he left the project)\n");
+  console.log(`\nStep 2: Delete ${bobName}'s relation (they left the project)\n`);
 
-  // Delete Bob's relation
+  // Delete the second member's relation
   const deleteRelationResult = Graph.deleteRelation({
     id: bobRelation.id,
   });
 
-  console.log(`  Deleted relation: Bob --[Member Of]--> Project`);
-  console.log(`  Bob entity still exists, just no longer linked`);
+  console.log(`  Deleted relation: ${bobName} --[${memberOfName}]--> ${projectName}`);
+  console.log(`  ${bobName} entity still exists, just no longer linked`);
 
   console.log(`
   Before Delete:                  After Delete:
@@ -336,7 +366,7 @@ function createAndDeleteRelationDemo(): { createOps: Op[]; deleteOps: Op[] } {
   };
 }
 
-const relationDemo = createAndDeleteRelationDemo();
+const relationDemo = await createAndDeleteRelationDemo();
 
 // =============================================================================
 // DEMO 4: Cleanup Patterns
