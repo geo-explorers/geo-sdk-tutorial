@@ -27,7 +27,13 @@ import { Graph } from "@geoprotocol/geo-sdk";
 import type { Op, Id } from "@geoprotocol/geo-sdk";
 
 // Import shared utilities
-import { publishOps, printOpsSummary } from "../src/functions.js";
+import {
+  publishOps,
+  printOpsSummary,
+  prompt,
+  promptProperty,
+  queryEntityByName,
+} from "../src/functions.js";
 import { TYPES, PROPERTIES } from "../src/constants.js";
 
 // Get current directory for relative imports
@@ -82,14 +88,14 @@ interface TypeRegistry {
   project: Id;
 }
 
-function createSchema(): { props: PropertyRegistry; types: TypeRegistry; ops: Op[] } {
+async function createSchema(): Promise<{ props: PropertyRegistry; types: TypeRegistry; ops: Op[] }> {
   // IMPORTANT: Reuse types and properties from the root space!
   // Only create properties that don't exist in the root space.
   const ops: Op[] = [];
 
   // Create ONLY the custom "founders" relation property
   // All other properties exist in the root space!
-  const foundersProp = Graph.createProperty({ name: "Founders", dataType: "RELATION" });
+  const foundersProp = await promptProperty("Founders");
   ops.push(...foundersProp.ops);
 
   console.log(`  Reusing ROOT SPACE properties: name, description, web_url, topics`);
@@ -115,7 +121,7 @@ function createSchema(): { props: PropertyRegistry; types: TypeRegistry; ops: Op
   };
 }
 
-const schema = createSchema();
+const schema = await createSchema();
 
 // =============================================================================
 // STEP 2: Load JSON Data Files
@@ -169,19 +175,24 @@ console.log("══════════════════════�
 const topicLookup = new Map<string, Id>();
 const personLookup = new Map<string, Id>();
 
-function importTopics(
+async function importTopics(
   data: TopicData[],
   props: PropertyRegistry,
   types: TypeRegistry
-): Op[] {
+): Promise<Op[]> {
   const ops: Op[] = [];
 
   for (const topic of data) {
+    let entityName = topic.name;
+    while (await queryEntityByName(entityName)) {
+      console.warn(`  ⚠ "${entityName}" already exists. Please enter a different name.`);
+      entityName = await prompt(`Enter a different name for topic "${topic.name}": `);
+    }
     const entity = Graph.createEntity({
-      name: topic.name,
+      name: entityName,
       types: [types.topic],
       values: [
-        { property: props.name, type: "text", value: topic.name },
+        { property: props.name, type: "text", value: entityName },
         { property: props.description, type: "text", value: topic.description },
       ],
     });
@@ -189,13 +200,13 @@ function importTopics(
 
     // Store in lookup for later reference
     topicLookup.set(topic.name, entity.id);
-    console.log(`  Topic: ${topic.name}`);
+    console.log(`  Topic: ${entityName}`);
   }
 
   return ops;
 }
 
-const topicOps = importTopics(topicsData, schema.props, schema.types);
+const topicOps = await importTopics(topicsData, schema.props, schema.types);
 
 // =============================================================================
 // STEP 4: Import People (with Topic Relations)
@@ -205,20 +216,25 @@ console.log("\n═════════════════════�
 console.log("  Step 4: Import People (with Topic Relations)");
 console.log("═══════════════════════════════════════════════════════════════\n");
 
-function importPeople(
+async function importPeople(
   data: PersonData[],
   props: PropertyRegistry,
   types: TypeRegistry
-): Op[] {
+): Promise<Op[]> {
   const ops: Op[] = [];
 
   for (const person of data) {
     // Create person entity
+    let entityName = person.name;
+    while (await queryEntityByName(entityName)) {
+      console.warn(`  ⚠ "${entityName}" already exists. Please enter a different name.`);
+      entityName = await prompt(`Enter a different name for person "${person.name}": `);
+    }
     const entity = Graph.createEntity({
-      name: person.name,
+      name: entityName,
       types: [types.person],
       values: [
-        { property: props.name, type: "text", value: person.name },
+        { property: props.name, type: "text", value: entityName },
         { property: props.description, type: "text", value: person.description },
       ],
     });
@@ -243,13 +259,13 @@ function importPeople(
     }
 
     const topicCount = person.topics?.length || 0;
-    console.log(`  Person: ${person.name} (${topicCount} topics)`);
+    console.log(`  Person: ${entityName} (${topicCount} topics)`);
   }
 
   return ops;
 }
 
-const peopleOps = importPeople(peopleData, schema.props, schema.types);
+const peopleOps = await importPeople(peopleData, schema.props, schema.types);
 
 // =============================================================================
 // STEP 5: Import Projects (with Topic and Founder Relations)
@@ -259,20 +275,25 @@ console.log("\n═════════════════════�
 console.log("  Step 5: Import Projects (with Topic and Founder Relations)");
 console.log("═══════════════════════════════════════════════════════════════\n");
 
-function importProjects(
+async function importProjects(
   data: ProjectData[],
   props: PropertyRegistry,
   types: TypeRegistry
-): Op[] {
+): Promise<Op[]> {
   const ops: Op[] = [];
 
   for (const project of data) {
     // Create project entity
+    let entityName = project.name;
+    while (await queryEntityByName(entityName)) {
+      console.warn(`  ⚠ "${entityName}" already exists. Please enter a different name.`);
+      entityName = await prompt(`Enter a different name for project "${project.name}": `);
+    }
     const entity = Graph.createEntity({
-      name: project.name,
+      name: entityName,
       types: [types.project],
       values: [
-        { property: props.name, type: "text", value: project.name },
+        { property: props.name, type: "text", value: entityName },
         { property: props.description, type: "text", value: project.description },
       ],
     });
@@ -312,13 +333,13 @@ function importProjects(
 
     const topicCount = project.topics?.length || 0;
     const founderCount = project.founders?.length || 0;
-    console.log(`  Project: ${project.name} (${topicCount} topics, ${founderCount} founders)`);
+    console.log(`  Project: ${entityName} (${topicCount} topics, ${founderCount} founders)`);
   }
 
   return ops;
 }
 
-const projectOps = importProjects(projectsData, schema.props, schema.types);
+const projectOps = await importProjects(projectsData, schema.props, schema.types);
 
 // =============================================================================
 // STEP 6: Visualize the Knowledge Graph

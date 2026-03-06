@@ -29,7 +29,14 @@ import { Graph } from "@geoprotocol/geo-sdk";
 import type { Op } from "@geoprotocol/geo-sdk";
 
 // Import shared utilities - see src/functions.ts for implementation details
-import { publishOps, printOpsSummary } from "../src/functions.js";
+import {
+  publishOps,
+  printOpsSummary,
+  prompt,
+  promptProperty,
+  promptType,
+  queryEntityByName,
+} from "../src/functions.js";
 
 /**
  * EXPLANATION:
@@ -147,31 +154,25 @@ async function onboardNewUser(privateKey: `0x${string}`): Promise<OnboardingResu
     // Step 1: Create Welcome Profile schema and entity
     console.log("[Step 1/2] Creating profile schema and entity...\n");
 
-    const nameResult = Graph.createProperty({
-      name: "Display Name",
-      dataType: "TEXT",
-    });
+    const nameResult = await promptProperty("Display Name");
+    const bioResult = await promptProperty("Bio");
+    const joinDateResult = await promptProperty("Join Date");
+    const profileTypeResult = await promptType("User Profile", [
+      nameResult.id,
+      bioResult.id,
+      joinDateResult.id,
+    ]);
 
-    const bioResult = Graph.createProperty({
-      name: "Bio",
-      dataType: "TEXT",
-    });
-
-    const joinDateResult = Graph.createProperty({
-      name: "Join Date",
-      dataType: "DATETIME",
-    });
-
-    const profileTypeResult = Graph.createType({
-      name: "User Profile",
-      properties: [nameResult.id, bioResult.id, joinDateResult.id],
-    });
-
+    let profileEntityName = await prompt("Enter your profile name (e.g. New User): ");
+    while (await queryEntityByName(profileEntityName)) {
+      console.warn(`  ⚠ "${profileEntityName}" already exists. Please enter a different name.`);
+      profileEntityName = await prompt("Enter a different name: ");
+    }
     const profileEntityResult = Graph.createEntity({
-      name: "New User",
+      name: profileEntityName,
       types: [profileTypeResult.id],
       values: [
-        { property: nameResult.id, type: "text", value: "New User" },
+        { property: nameResult.id, type: "text", value: profileEntityName },
         { property: bioResult.id, type: "text", value: "Just joined the knowledge graph!" },
         { property: joinDateResult.id, type: "datetime", value: new Date().toISOString() },
       ],

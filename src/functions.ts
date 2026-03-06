@@ -14,12 +14,15 @@ import {
   daoSpace,
   getSmartAccountWalletClient,
   getWalletClient,
+  Graph,
   personalSpace,
   TESTNET_RPC_URL,
+  type Id,
   type Op,
 } from "@geoprotocol/geo-sdk";
 import { SpaceRegistryAbi } from "@geoprotocol/geo-sdk/abis";
 import { TESTNET } from "@geoprotocol/geo-sdk/contracts";
+import { createInterface } from "readline";
 import { API_URL } from "./constants.js";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -78,6 +81,156 @@ export async function gql(
     throw new Error(`GraphQL: ${json.errors[0].message}`);
   }
   return json.data;
+}
+
+// ─── CLI Prompt Helper ───────────────────────────────────────────────────────
+
+/**
+ * Prompt the user for input via stdin.
+ */
+export function prompt(question: string): Promise<string> {
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  return new Promise((resolve) => {
+    rl.question(question, (answer) => {
+      rl.close();
+      resolve(answer.trim());
+    });
+  });
+}
+
+// ─── Duplicate-Check Query Helpers ───────────────────────────────────────────
+
+/**
+ * Check if an entity with the given name already exists in the knowledge graph.
+ * Returns the entity's ID if found, null otherwise.
+ */
+export async function queryEntityByName(name: string): Promise<string | null> {
+  try {
+    const data = await gql(`{
+      search(query: ${JSON.stringify(name)}, first: 5) {
+        id
+        name
+      }
+    }`);
+    const entities = data?.search ?? [];
+    const exact = entities.find(
+      (e: any) => e.name?.toLowerCase() === name.toLowerCase()
+    );
+    if (exact) return exact.id;
+    return null;
+  } catch (err) {
+    console.warn(`  ⚠ API query failed for "${name}":`, (err as Error).message);
+    return null;
+  }
+}
+
+/**
+ * Check if a property with the given name already exists in the knowledge graph.
+ * Returns the property's ID if found, null otherwise.
+ */
+export async function queryPropertyByName(name: string): Promise<string | null> {
+  try {
+    const data = await gql(`{
+      search(query: ${JSON.stringify(name)}, first: 5) {
+        id
+        name
+      }
+    }`);
+    const entities = data?.search ?? [];
+    const exact = entities.find(
+      (e: any) => e.name?.toLowerCase() === name.toLowerCase()
+    );
+    if (exact) return exact.id;
+    return null;
+  } catch (err) {
+    console.warn(`  ⚠ API query failed for "${name}":`, (err as Error).message);
+    return null;
+  }
+}
+
+/**
+ * Check if a type with the given name already exists in the knowledge graph.
+ * Returns the type's ID if found, null otherwise.
+ */
+export async function queryTypeByName(name: string): Promise<string | null> {
+  try {
+    const data = await gql(`{
+      search(query: ${JSON.stringify(name)}, first: 5) {
+        id
+        name
+      }
+    }`);
+    const entities = data?.search ?? [];
+    const exact = entities.find(
+      (e: any) => e.name?.toLowerCase() === name.toLowerCase()
+    );
+    if (exact) return exact.id;
+    return null;
+  } catch (err) {
+    console.warn(`  ⚠ API query failed for "${name}":`, (err as Error).message);
+    return null;
+  }
+}
+
+// ─── Property & Type Prompt Helpers ──────────────────────────────────────────
+
+/**
+ * Prompt the user for a property name, checking for duplicates and offering
+ * the option to reuse an existing property instead of creating a new one.
+ *
+ * - If the name is unique: prompts for data type and creates a new property.
+ * - If the name already exists: offers y/n to reuse it (ops will be empty).
+ * - If the user declines reuse: re-prompts for a different name.
+ */
+export async function promptProperty(
+  hint: string
+): Promise<{ id: Id; ops: Op[] }> {
+  let name = await prompt(`Enter property name (e.g. ${hint}): `);
+  while (true) {
+    const existingId = await queryPropertyByName(name);
+    if (!existingId) break;
+    console.warn(`  ⚠ "${name}" already exists in the knowledge graph.`);
+    const choice = await prompt("  Reuse it? (y/n): ");
+    if (choice.toLowerCase().startsWith("y")) {
+      console.log(`  Reusing existing property "${name}"`);
+      return { id: existingId as Id, ops: [] };
+    }
+    name = await prompt("Enter a different name: ");
+  }
+  const dataType = await prompt(
+    "Enter data type (TEXT/INT64/FLOAT64/BOOLEAN/DATE/DATETIME/POINT/RELATION/...): "
+  );
+  return Graph.createProperty({ name, dataType: dataType as any });
+}
+
+/**
+ * Prompt the user for a type name, checking for duplicates and offering
+ * the option to reuse an existing type instead of creating a new one.
+ *
+ * - If the name is unique: creates a new type with the given property IDs.
+ * - If the name already exists: offers y/n to reuse it (ops will be empty).
+ * - If the user declines reuse: re-prompts for a different name.
+ *
+ * @param hint - Example name shown in the prompt (e.g. "Book")
+ * @param propertyIds - Property IDs to attach when creating a new type
+ */
+export async function promptType(
+  hint: string,
+  propertyIds: Id[]
+): Promise<{ id: Id; ops: Op[] }> {
+  let name = await prompt(`Enter type name (e.g. ${hint}): `);
+  while (true) {
+    const existingId = await queryTypeByName(name);
+    if (!existingId) break;
+    console.warn(`  ⚠ "${name}" already exists in the knowledge graph.`);
+    const choice = await prompt("  Reuse it? (y/n): ");
+    if (choice.toLowerCase().startsWith("y")) {
+      console.log(`  Reusing existing type "${name}"`);
+      return { id: existingId as Id, ops: [] };
+    }
+    name = await prompt("Enter a different name: ");
+  }
+  return Graph.createType({ name, properties: propertyIds });
 }
 
 // ─── Space Helpers ───────────────────────────────────────────────────────────

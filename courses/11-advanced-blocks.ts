@@ -33,7 +33,12 @@ import {
 } from "../src/constants.js";
 
 // Import shared utilities
-import { publishOps, printOpsSummary } from "../src/functions.js";
+import {
+  publishOps,
+  printOpsSummary,
+  prompt,
+  queryEntityByName,
+} from "../src/functions.js";
 
 console.log("=== Course 11: Advanced Blocks - Text, Data, and Images ===\n");
 
@@ -59,23 +64,33 @@ console.log("══════════════════════�
 console.log("  Demo 1: Text Blocks (Markdown Content)");
 console.log("═══════════════════════════════════════════════════════════════\n");
 
-function createTextBlockDemo(): Op[] {
+async function createTextBlockDemo(): Promise<Op[]> {
   const allOps: Op[] = [];
 
   // Create a parent entity (e.g., a project page)
+  let projectName = await prompt("Enter project name (e.g. My Awesome Project): ");
+  while (await queryEntityByName(projectName)) {
+    console.warn(`  ⚠ "${projectName}" already exists. Please enter a different name.`);
+    projectName = await prompt("Enter a different name: ");
+  }
   const projectResult = Graph.createEntity({
-    name: "My Awesome Project",
+    name: projectName,
     types: [TYPES.project],
     values: [
       { property: PROPERTIES.description, type: "text", value: "A demo project for text blocks" },
     ],
   });
   allOps.push(...projectResult.ops);
-  console.log(`  Created project: "My Awesome Project"`);
+  console.log(`  Created project: "${projectName}"`);
 
   // Create text block 1: Introduction
+  let introBlockName = await prompt("Enter name for first text block (e.g. Introduction): ");
+  while (await queryEntityByName(introBlockName)) {
+    console.warn(`  ⚠ "${introBlockName}" already exists. Please enter a different name.`);
+    introBlockName = await prompt("Enter a different name: ");
+  }
   const introBlock = Graph.createEntity({
-    name: "Introduction",
+    name: introBlockName,
     types: [TYPES.text_block],
     values: [
       {
@@ -102,11 +117,16 @@ console.log(greeting);
     ],
   });
   allOps.push(...introBlock.ops);
-  console.log(`  Created text block: "Introduction"`);
+  console.log(`  Created text block: "${introBlockName}"`);
 
   // Create text block 2: Getting Started
+  let gettingStartedName = await prompt("Enter name for second text block (e.g. Getting Started): ");
+  while (await queryEntityByName(gettingStartedName)) {
+    console.warn(`  ⚠ "${gettingStartedName}" already exists. Please enter a different name.`);
+    gettingStartedName = await prompt("Enter a different name: ");
+  }
   const gettingStartedBlock = Graph.createEntity({
-    name: "Getting Started",
+    name: gettingStartedName,
     types: [TYPES.text_block],
     values: [
       {
@@ -124,7 +144,7 @@ console.log(greeting);
     ],
   });
   allOps.push(...gettingStartedBlock.ops);
-  console.log(`  Created text block: "Getting Started"`);
+  console.log(`  Created text block: "${gettingStartedName}"`);
 
   // Generate positions for ordering
   const pos1 = Position.generateBetween(null, null); // First position
@@ -154,18 +174,18 @@ console.log(greeting);
   ---------------------
 
   +------------------------------------------+
-  |         My Awesome Project               |
+  |         ${projectName.padEnd(32)}|
   |            (Project)                     |
   +------------------------------------------+
   |                                          |
   |  +------------------------------------+  |
-  |  | # Welcome to My Project            |  |  <- Text Block 1
+  |  | # ${introBlockName.padEnd(35)}|  |  <- Text Block 1
   |  |                                    |  |     (Position: ${pos1.slice(0, 8)}...)
   |  | This project demonstrates...       |  |
   |  +------------------------------------+  |
   |                                          |
   |  +------------------------------------+  |
-  |  | ## Getting Started                 |  |  <- Text Block 2
+  |  | ## ${gettingStartedName.padEnd(33)}|  |  <- Text Block 2
   |  |                                    |  |     (Position: ${pos2.slice(0, 8)}...)
   |  | 1. Clone the repository...         |  |
   |  +------------------------------------+  |
@@ -176,7 +196,7 @@ console.log(greeting);
   return allOps;
 }
 
-const textBlockOps = createTextBlockDemo();
+const textBlockOps = await createTextBlockDemo();
 
 // =============================================================================
 // DEMO 2: Data Blocks (Query-based)
@@ -186,23 +206,33 @@ console.log("══════════════════════�
 console.log("  Demo 2: Data Blocks (Query-based)");
 console.log("═══════════════════════════════════════════════════════════════\n");
 
-function createQueryDataBlockDemo(): Op[] {
+async function createQueryDataBlockDemo(): Promise<Op[]> {
   const allOps: Op[] = [];
 
   // Create a parent page
+  let dashboardName = await prompt("Enter dashboard name (e.g. Project Dashboard): ");
+  while (await queryEntityByName(dashboardName)) {
+    console.warn(`  ⚠ "${dashboardName}" already exists. Please enter a different name.`);
+    dashboardName = await prompt("Enter a different name: ");
+  }
   const dashboardResult = Graph.createEntity({
-    name: "Project Dashboard",
+    name: dashboardName,
     types: [TYPES.project],
     values: [
       { property: PROPERTIES.description, type: "text", value: "Dashboard showing recent projects" },
     ],
   });
   allOps.push(...dashboardResult.ops);
-  console.log(`  Created dashboard: "Project Dashboard"`);
+  console.log(`  Created dashboard: "${dashboardName}"`);
 
   // Create a query data block
+  let queryDataBlockName = await prompt("Enter query data block name (e.g. Recent Projects): ");
+  while (await queryEntityByName(queryDataBlockName)) {
+    console.warn(`  ⚠ "${queryDataBlockName}" already exists. Please enter a different name.`);
+    queryDataBlockName = await prompt("Enter a different name: ");
+  }
   const queryDataBlock = Graph.createEntity({
-    name: "Recent Projects",
+    name: queryDataBlockName,
     types: [TYPES.data_block],
     values: [
       {
@@ -215,7 +245,7 @@ function createQueryDataBlockDemo(): Op[] {
     ],
   });
   allOps.push(...queryDataBlock.ops);
-  console.log(`  Created query data block: "Recent Projects"`);
+  console.log(`  Created query data block: "${queryDataBlockName}"`);
 
   // Set data source type to Query (live results)
   const dataSourceRelation = Graph.createRelation({
@@ -256,7 +286,7 @@ function createQueryDataBlockDemo(): Op[] {
   return allOps;
 }
 
-const queryDataBlockOps = createQueryDataBlockDemo();
+const queryDataBlockOps = await createQueryDataBlockDemo();
 
 // =============================================================================
 // DEMO 3: Data Blocks (Collection-based)
@@ -266,12 +296,17 @@ console.log("══════════════════════�
 console.log("  Demo 3: Data Blocks (Collection-based)");
 console.log("═══════════════════════════════════════════════════════════════\n");
 
-function createCollectionDataBlockDemo(): Op[] {
+async function createCollectionDataBlockDemo(): Promise<Op[]> {
   const allOps: Op[] = [];
 
   // Create some sample entities to feature
+  let featuredItem1Name = await prompt("Enter name for featured item 1 (e.g. Featured Item 1): ");
+  while (await queryEntityByName(featuredItem1Name)) {
+    console.warn(`  ⚠ "${featuredItem1Name}" already exists. Please enter a different name.`);
+    featuredItem1Name = await prompt("Enter a different name: ");
+  }
   const entity1 = Graph.createEntity({
-    name: "Featured Item 1",
+    name: featuredItem1Name,
     types: [TYPES.topic],
     values: [
       { property: PROPERTIES.description, type: "text", value: "A hand-picked featured item" },
@@ -279,8 +314,13 @@ function createCollectionDataBlockDemo(): Op[] {
   });
   allOps.push(...entity1.ops);
 
+  let featuredItem2Name = await prompt("Enter name for featured item 2 (e.g. Featured Item 2): ");
+  while (await queryEntityByName(featuredItem2Name)) {
+    console.warn(`  ⚠ "${featuredItem2Name}" already exists. Please enter a different name.`);
+    featuredItem2Name = await prompt("Enter a different name: ");
+  }
   const entity2 = Graph.createEntity({
-    name: "Featured Item 2",
+    name: featuredItem2Name,
     types: [TYPES.topic],
     values: [
       { property: PROPERTIES.description, type: "text", value: "Another featured item" },
@@ -288,8 +328,13 @@ function createCollectionDataBlockDemo(): Op[] {
   });
   allOps.push(...entity2.ops);
 
+  let featuredItem3Name = await prompt("Enter name for featured item 3 (e.g. Featured Item 3): ");
+  while (await queryEntityByName(featuredItem3Name)) {
+    console.warn(`  ⚠ "${featuredItem3Name}" already exists. Please enter a different name.`);
+    featuredItem3Name = await prompt("Enter a different name: ");
+  }
   const entity3 = Graph.createEntity({
-    name: "Featured Item 3",
+    name: featuredItem3Name,
     types: [TYPES.topic],
     values: [
       { property: PROPERTIES.description, type: "text", value: "Yet another featured item" },
@@ -300,12 +345,17 @@ function createCollectionDataBlockDemo(): Op[] {
   console.log(`  Created 3 sample entities to feature`);
 
   // Create a collection data block
+  let collectionBlockName = await prompt("Enter collection data block name (e.g. Featured Topics): ");
+  while (await queryEntityByName(collectionBlockName)) {
+    console.warn(`  ⚠ "${collectionBlockName}" already exists. Please enter a different name.`);
+    collectionBlockName = await prompt("Enter a different name: ");
+  }
   const collectionDataBlock = Graph.createEntity({
-    name: "Featured Topics",
+    name: collectionBlockName,
     types: [TYPES.data_block],
   });
   allOps.push(...collectionDataBlock.ops);
-  console.log(`  Created collection data block: "Featured Topics"`);
+  console.log(`  Created collection data block: "${collectionBlockName}"`);
 
   // Set data source type to Collection (hand-picked items)
   const dataSourceRelation = Graph.createRelation({
@@ -368,7 +418,7 @@ function createCollectionDataBlockDemo(): Op[] {
   return allOps;
 }
 
-const collectionDataBlockOps = createCollectionDataBlockDemo();
+const collectionDataBlockOps = await createCollectionDataBlockDemo();
 
 // =============================================================================
 // DEMO 4: Images
@@ -378,12 +428,17 @@ console.log("══════════════════════�
 console.log("  Demo 4: Images (IPFS Media)");
 console.log("═══════════════════════════════════════════════════════════════\n");
 
-function createImageDemo(): Op[] {
+async function createImageDemo(): Promise<Op[]> {
   const allOps: Op[] = [];
 
   // Create an image entity
+  let imageName = await prompt("Enter image entity name (e.g. Project Logo): ");
+  while (await queryEntityByName(imageName)) {
+    console.warn(`  ⚠ "${imageName}" already exists. Please enter a different name.`);
+    imageName = await prompt("Enter a different name: ");
+  }
   const imageResult = Graph.createEntity({
-    name: "Project Logo",
+    name: imageName,
     types: [TYPES.image],
     values: [
       { property: PROPERTIES.ipfs_url, type: "text", value: "ipfs://QmExample..." },
@@ -393,22 +448,32 @@ function createImageDemo(): Op[] {
     ],
   });
   allOps.push(...imageResult.ops);
-  console.log(`  Created image entity: "Project Logo"`);
+  console.log(`  Created image entity: "${imageName}"`);
 
   // Create a person entity with an avatar
+  let personName = await prompt("Enter person name (e.g. Jane Developer): ");
+  while (await queryEntityByName(personName)) {
+    console.warn(`  ⚠ "${personName}" already exists. Please enter a different name.`);
+    personName = await prompt("Enter a different name: ");
+  }
   const personResult = Graph.createEntity({
-    name: "Jane Developer",
+    name: personName,
     types: [TYPES.person],
     values: [
       { property: PROPERTIES.description, type: "text", value: "Full-stack developer" },
     ],
   });
   allOps.push(...personResult.ops);
-  console.log(`  Created person: "Jane Developer"`);
+  console.log(`  Created person: "${personName}"`);
 
   // Create avatar image
+  let avatarName = await prompt(`Enter avatar image name (e.g. ${personName}'s Avatar): `);
+  while (await queryEntityByName(avatarName)) {
+    console.warn(`  ⚠ "${avatarName}" already exists. Please enter a different name.`);
+    avatarName = await prompt("Enter a different name: ");
+  }
   const avatarResult = Graph.createEntity({
-    name: "Jane's Avatar",
+    name: avatarName,
     types: [TYPES.image],
     values: [
       { property: PROPERTIES.ipfs_url, type: "text", value: "ipfs://QmAvatar..." },
@@ -443,7 +508,7 @@ function createImageDemo(): Op[] {
   return allOps;
 }
 
-const imageOps = createImageDemo();
+const imageOps = await createImageDemo();
 
 // =============================================================================
 // DEMO 5: View Types Reference
