@@ -10,6 +10,9 @@ node_modules/
 dist/
 build/
 
+# Script output reports
+output/
+
 # IDE
 .vscode/
 .idea/
