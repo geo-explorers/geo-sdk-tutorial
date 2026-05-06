@@ -1,12 +1,14 @@
 /**
- * Shared Helper Functions for Geo SDK
+ * Shared Helper Functions for Geo SDK Tutorial
  *
- * This module provides reusable utilities for:
- * - GraphQL API queries
+ * Provides reusable utilities for:
+ * - GraphQL API queries (with type-filtered lookups)
  * - Publishing operations (personal and DAO spaces)
  * - Space management
  *
- * Based on patterns from: https://github.com/geobrowser/geo_tech_demo
+ * Key fix over previous version: queryPropertyByName and queryTypeByName
+ * now filter by entity type (Property/Type) to avoid returning wrong entities.
+ * See: Hasnat review — search("Creator") returned a Role entity, not a Property.
  */
 
 import { createPublicClient, type Hex, http } from "viem";
@@ -16,6 +18,7 @@ import {
   getWalletClient,
   Graph,
   personalSpace,
+  SystemIds,
   TESTNET_RPC_URL,
   type Id,
   type Op,
@@ -42,7 +45,7 @@ export interface PublishConfig {
   privateKey: `0x${string}`;
   useSmartAccount?: boolean;
   network?: "TESTNET" | "MAINNET";
-  spaceId?: string; // Optional: if not provided, uses personal space
+  spaceId?: string;
 }
 
 // ─── GraphQL Helper ──────────────────────────────────────────────────────────
@@ -52,13 +55,10 @@ export interface PublishConfig {
  *
  * @example
  * ```typescript
- * const data = await gql(`{
- *   space(id: "${spaceId}") {
- *     id
- *     type
- *     page { name description }
- *   }
- * }`);
+ * const data = await gql(
+ *   `query($id: UUID!) { space(id: $id) { id type page { name } } }`,
+ *   { id: spaceId }
+ * );
  * ```
  */
 export async function gql(
@@ -98,16 +98,19 @@ export function prompt(question: string): Promise<string> {
   });
 }
 
-// ─── Duplicate-Check Query Helpers ───────────────────────────────────────────
+// ─── Type-Filtered Lookup Helpers ───────────────────────────────────────────
 
 /**
- * Check if an entity with the given name already exists in the knowledge graph.
+ * Search for an entity by exact name (case-insensitive).
  * Returns the entity's ID if found, null otherwise.
+ *
+ * This is an UNSCOPED search — it searches across all spaces and all types.
+ * Use queryPropertyByName or queryTypeByName for type-specific lookups.
  */
 export async function queryEntityByName(name: string): Promise<string | null> {
   try {
     const data = await gql(`{
-      search(query: ${JSON.stringify(name)}, first: 5) {
+      search(query: ${JSON.stringify(name)}, first: 10) {
         id
         name
       }
@@ -116,58 +119,70 @@ export async function queryEntityByName(name: string): Promise<string | null> {
     const exact = entities.find(
       (e: any) => e.name?.toLowerCase() === name.toLowerCase()
     );
-    if (exact) return exact.id;
-    return null;
+    return exact?.id ?? null;
   } catch (err) {
-    console.warn(`  ⚠ API query failed for "${name}":`, (err as Error).message);
+    console.warn(`  Warning: API query failed for "${name}":`, (err as Error).message);
     return null;
   }
 }
 
 /**
- * Check if a property with the given name already exists in the knowledge graph.
- * Returns the property's ID if found, null otherwise.
+ * Search for a PROPERTY entity by exact name.
+ * Filters results to only Property-typed entities (typeId = SystemIds.PROPERTY).
+ *
+ * Why this matters: an unscoped search("Creator") returns a Role entity first,
+ * not a Property entity. Using values from the wrong entity type as property IDs
+ * corrupts the knowledge graph.
  */
 export async function queryPropertyByName(name: string): Promise<string | null> {
   try {
     const data = await gql(`{
-      search(query: ${JSON.stringify(name)}, first: 5) {
+      search(
+        query: ${JSON.stringify(name)},
+        first: 10,
+        filter: {
+          typeIds: { anyEqualTo: "${SystemIds.PROPERTY}" },
+          name: { is: ${JSON.stringify(name)} }
+        }
+      ) {
         id
         name
       }
     }`);
-    const entities = data?.search ?? [];
-    const exact = entities.find(
-      (e: any) => e.name?.toLowerCase() === name.toLowerCase()
-    );
-    if (exact) return exact.id;
-    return null;
+    const match = (data?.search ?? [])[0];
+    return match?.id ?? null;
   } catch (err) {
-    console.warn(`  ⚠ API query failed for "${name}":`, (err as Error).message);
+    console.warn(`  Warning: property lookup failed for "${name}":`, (err as Error).message);
     return null;
   }
 }
 
 /**
- * Check if a type with the given name already exists in the knowledge graph.
- * Returns the type's ID if found, null otherwise.
+ * Search for a TYPE entity by exact name.
+ * Filters results to only Type-typed entities (typeId = SystemIds.SCHEMA_TYPE).
+ *
+ * Why this matters: an unscoped search("Topic") could return a Data Block
+ * named "Topics" before the actual Type entity "Topic".
  */
 export async function queryTypeByName(name: string): Promise<string | null> {
   try {
     const data = await gql(`{
-      search(query: ${JSON.stringify(name)}, first: 5) {
+      search(
+        query: ${JSON.stringify(name)},
+        first: 10,
+        filter: {
+          typeIds: { anyEqualTo: "${SystemIds.SCHEMA_TYPE}" },
+          name: { is: ${JSON.stringify(name)} }
+        }
+      ) {
         id
         name
       }
     }`);
-    const entities = data?.search ?? [];
-    const exact = entities.find(
-      (e: any) => e.name?.toLowerCase() === name.toLowerCase()
-    );
-    if (exact) return exact.id;
-    return null;
+    const match = (data?.search ?? [])[0];
+    return match?.id ?? null;
   } catch (err) {
-    console.warn(`  ⚠ API query failed for "${name}":`, (err as Error).message);
+    console.warn(`  Warning: type lookup failed for "${name}":`, (err as Error).message);
     return null;
   }
 }
@@ -175,12 +190,8 @@ export async function queryTypeByName(name: string): Promise<string | null> {
 // ─── Property & Type Prompt Helpers ──────────────────────────────────────────
 
 /**
- * Prompt the user for a property name, checking for duplicates and offering
- * the option to reuse an existing property instead of creating a new one.
- *
- * - If the name is unique: prompts for data type and creates a new property.
- * - If the name already exists: offers y/n to reuse it (ops will be empty).
- * - If the user declines reuse: re-prompts for a different name.
+ * Prompt the user for a property name, checking for duplicates.
+ * If the property exists, offers to reuse it.
  */
 export async function promptProperty(
   hint: string
@@ -189,7 +200,7 @@ export async function promptProperty(
   while (true) {
     const existingId = await queryPropertyByName(name);
     if (!existingId) break;
-    console.warn(`  ⚠ "${name}" already exists in the knowledge graph.`);
+    console.warn(`  "${name}" already exists as a property in the knowledge graph.`);
     const choice = await prompt("  Reuse it? (y/n): ");
     if (choice.toLowerCase().startsWith("y")) {
       console.log(`  Reusing existing property "${name}"`);
@@ -198,21 +209,14 @@ export async function promptProperty(
     name = await prompt("Enter a different name: ");
   }
   const dataType = await prompt(
-    "Enter data type (TEXT/INT64/FLOAT64/BOOLEAN/DATE/DATETIME/POINT/RELATION/...): "
+    "Enter data type (TEXT/INTEGER/FLOAT/BOOLEAN/DATE/DATETIME/POINT/RELATION/...): "
   );
   return Graph.createProperty({ name, dataType: dataType as any });
 }
 
 /**
- * Prompt the user for a type name, checking for duplicates and offering
- * the option to reuse an existing type instead of creating a new one.
- *
- * - If the name is unique: creates a new type with the given property IDs.
- * - If the name already exists: offers y/n to reuse it (ops will be empty).
- * - If the user declines reuse: re-prompts for a different name.
- *
- * @param hint - Example name shown in the prompt (e.g. "Book")
- * @param propertyIds - Property IDs to attach when creating a new type
+ * Prompt the user for a type name, checking for duplicates.
+ * If the type exists, offers to reuse it.
  */
 export async function promptType(
   hint: string,
@@ -222,7 +226,7 @@ export async function promptType(
   while (true) {
     const existingId = await queryTypeByName(name);
     if (!existingId) break;
-    console.warn(`  ⚠ "${name}" already exists in the knowledge graph.`);
+    console.warn(`  "${name}" already exists as a type in the knowledge graph.`);
     const choice = await prompt("  Reuse it? (y/n): ");
     if (choice.toLowerCase().startsWith("y")) {
       console.log(`  Reusing existing type "${name}"`);
@@ -246,10 +250,7 @@ export function createGeoPublicClient() {
 
 /**
  * Check if an address has a personal space, create one if not.
- * Returns the space ID.
- *
- * @param address - The wallet address to check
- * @param walletClient - Wallet client to use for creating space if needed
+ * Returns the space ID (32-char hex UUID without dashes).
  */
 export async function ensurePersonalSpace(
   address: string,
@@ -264,10 +265,9 @@ export async function ensurePersonalSpace(
     const { to, calldata } = personalSpace.createSpace();
     const txHash = await walletClient.sendTransaction({ to, data: calldata });
     await publicClient.waitForTransactionReceipt({ hash: txHash });
-    console.log(`  ✓ Personal space created`);
+    console.log("  Personal space created");
   }
 
-  // Look up space ID from registry
   const spaceIdHex = (await publicClient.readContract({
     address: TESTNET.SPACE_REGISTRY_ADDRESS,
     abi: SpaceRegistryAbi,
@@ -275,7 +275,6 @@ export async function ensurePersonalSpace(
     args: [address as `0x${string}`],
   })) as Hex;
 
-  // Convert bytes16 hex to UUID string (without dashes)
   return spaceIdHex.slice(2, 34).toLowerCase();
 }
 
@@ -300,21 +299,13 @@ export async function getSpaceId(address: string): Promise<string> {
 /**
  * Publish operations to the knowledge graph.
  *
- * This is a unified helper that:
- * 1. Creates wallet client (smart account or EOA)
- * 2. Ensures personal space exists
- * 3. Queries API to detect if target is personal or DAO space
- * 4. Publishes to IPFS and submits on-chain
+ * Detects whether the target is a personal or DAO space and uses the
+ * correct publish flow. For DAO spaces, submits a proposal.
  *
- * @example
- * ```typescript
- * const result = await publishOps({
- *   ops: allOps,
- *   editName: "Add new entities",
- *   privateKey: PRIVATE_KEY,
- *   useSmartAccount: true,
- * });
- * ```
+ * Note on `author` parameter:
+ *   The SDK expects `author` to be the personal space ID (UUID),
+ *   NOT the wallet address. This was a common source of confusion
+ *   across curator codebases.
  */
 export async function publishOps(config: PublishConfig): Promise<PublishResult> {
   const {
@@ -326,17 +317,20 @@ export async function publishOps(config: PublishConfig): Promise<PublishResult> 
   } = config;
 
   try {
-    // Step 1: Create wallet client
     const walletClient = useSmartAccount
       ? await getSmartAccountWalletClient({ privateKey })
       : await getWalletClient({ privateKey });
 
     const address = walletClient.account!.address;
 
-    // Step 2: Ensure personal space exists and get space ID
-    const spaceId = config.spaceId || (await ensurePersonalSpace(address, walletClient as any));
+    // Get caller's personal space ID (used as author for both flows)
+    const callerSpaceId = config.spaceId
+      ? await getCallerPersonalSpaceId(address)
+      : await ensurePersonalSpace(address, walletClient as any);
 
-    // Step 3: Query space type to determine publish method
+    const spaceId = config.spaceId ?? callerSpaceId;
+
+    // Query space to determine publish method
     const spaceData = await gql(`{
       space(id: "${spaceId}") {
         type
@@ -358,13 +352,13 @@ export async function publishOps(config: PublishConfig): Promise<PublishResult> 
     let cid: string;
     let editId: string;
 
-    // Step 4: Publish based on space type
     if (spaceType === "PERSONAL") {
+      // Personal space: author = personal space ID (not wallet address)
       const result = await personalSpace.publishEdit({
         name: editName,
         spaceId,
         ops,
-        author: address,
+        author: spaceId,
         network: network as "TESTNET",
       });
       cid = result.cid;
@@ -372,40 +366,29 @@ export async function publishOps(config: PublishConfig): Promise<PublishResult> 
       to = result.to;
       calldata = result.calldata;
     } else {
-      // DAO space - need to resolve caller's personal space
-      const personalSpaceData = await gql(`{
-        spaces(filter: { address: { is: "${address}" } }) { id type }
-      }`);
-
-      const callerSpace = personalSpaceData.spaces?.find(
-        (s: any) => s.type === "PERSONAL"
-      );
-      if (!callerSpace) {
-        throw new Error(`No personal space found for wallet ${address}`);
-      }
-
-      const callerSpaceId: string = callerSpace.id;
+      // DAO space: need caller's personal space for membership check + author
+      const personalSpaceId = await getCallerPersonalSpaceId(address);
 
       // Verify caller is member/editor
-      const members = spaceData.space.membersList || [];
-      const editors = spaceData.space.editorsList || [];
+      const members = spaceData.space.membersList ?? [];
+      const editors = spaceData.space.editorsList ?? [];
       const allCandidates = [...members, ...editors];
       const isMemberOrEditor = allCandidates.some(
-        (m: any) => m.memberSpaceId === callerSpaceId
+        (m: any) => m.memberSpaceId === personalSpaceId
       );
 
       if (!isMemberOrEditor) {
         throw new Error(
-          `Your personal space (${callerSpaceId}) is not a member or editor of DAO space ${spaceId}`
+          `Your personal space (${personalSpaceId}) is not a member or editor of DAO space ${spaceId}`
         );
       }
 
       const result = await daoSpace.proposeEdit({
         name: editName,
         ops,
-        author: callerSpaceId as `0x${string}`,
+        author: personalSpaceId,
         network: network as "TESTNET",
-        callerSpaceId: `0x${callerSpaceId}` as `0x${string}`,
+        callerSpaceId: `0x${personalSpaceId}` as `0x${string}`,
         daoSpaceId: `0x${spaceId}` as `0x${string}`,
         daoSpaceAddress: daoAddress as `0x${string}`,
       });
@@ -415,7 +398,6 @@ export async function publishOps(config: PublishConfig): Promise<PublishResult> 
       calldata = result.calldata;
     }
 
-    // Step 5: Submit transaction
     const txHash = await (walletClient as any).sendTransaction({ to, data: calldata });
     await publicClient.waitForTransactionReceipt({ hash: txHash });
 
@@ -434,6 +416,20 @@ export async function publishOps(config: PublishConfig): Promise<PublishResult> 
       error: errorMessage,
     };
   }
+}
+
+/**
+ * Look up the caller's personal space ID from their wallet address.
+ */
+async function getCallerPersonalSpaceId(address: string): Promise<string> {
+  const data = await gql(`{
+    spaces(filter: { address: { is: "${address}" } }) { id type }
+  }`);
+  const personal = data.spaces?.find((s: any) => s.type === "PERSONAL");
+  if (!personal) {
+    throw new Error(`No personal space found for wallet ${address}`);
+  }
+  return personal.id;
 }
 
 // ─── Ops Utilities ───────────────────────────────────────────────────────────
